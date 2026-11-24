@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#102b46">
+  <link rel="icon" type="image/svg+xml" data-config="favicon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%23102b46'/%3E%3Ctext x='50%25' y='54%25' dominant-baseline='middle' text-anchor='middle' fill='%23ffffff' font-family='sans-serif' font-weight='700' font-size='34'%3Ea%3C/text%3E%3C/svg%3E">
+  <title>Painel Administrativo | NEXORA Clinic</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+
+  <!-- TELA 0: Verificação inicial de sessão -->
+  <div class="auth-checking" id="auth-checking" role="status" aria-live="polite">
+    <div class="spinner" aria-hidden="true"></div>
+    <p>Verificando sessão segura...</p>
+  </div>
+
+  <!-- TELA 1: Login Administrativo -->
+  <main class="login-screen" id="login-view" hidden>
+    <div class="login-card">
+      <div class="login-header">
+        <div class="brand">
+          <span class="brand-mark" data-config="brand-mark">a</span>
+          <span>
+            <span data-config="brand-prefix">clínica</span>
+            <strong data-config="brand-highlight">aurora</strong>
+            <small>ÁREA ADMINISTRATIVA</small>
+          </span>
+        </div>
+        <h1>Acesso ao Painel</h1>
+        <p>Entre com suas credenciais autorizadas para gerenciar agendamentos, profissionais e especialidades.</p>
+      </div>
+
+      <form class="admin-form" id="login-form" novalidate>
+        <div class="field-group">
+          <label for="login-email">E-mail</label>
+          <input
+            id="login-email"
+            name="email"
+            type="email"
+            placeholder="seuemail@clinica.com"
+            autocomplete="email"
+            required
+          >
+        </div>
+
+        <div class="field-group">
+          <label for="login-password">Senha</label>
+          <input
+            id="login-password"
+            name="password"
+            type="password"
+            placeholder="••••••••"
+            autocomplete="current-password"
+            required
+          >
+        </div>
+
+        <div class="alert-box alert-error" id="login-feedback" role="alert" hidden></div>
+
+        <button class="button button-primary button-full" id="login-submit" type="submit">
+          Entrar no painel <span>↗</span>
+        </button>
+      </form>
+
+      <div class="login-footer">
+        <a href="index.html" class="back-link">← Voltar para o site institucional</a>
+        <span>PLATAFORMA NEXORA CLINIC</span>
+      </div>
+    </div>
+  </main>
+
+  <!-- TELA 2: Painel Administrativo (oculto até validar sessão + clínica no banco) -->
+  <div class="admin-app" id="dashboard-view" hidden>
+    <header class="admin-header">
+      <div class="admin-header-left">
+        <div class="brand">
+          <span class="brand-mark" data-config="brand-mark">a</span>
+          <span>
+            <strong id="header-clinic-name">Carregando clínica...</strong>
+            <small>PAINEL ADMINISTRATIVO · NEXORA</small>
+          </span>
+        </div>
+      </div>
+
+      <div class="admin-header-right">
+        <span class="user-badge" id="user-badge">Usuário autenticado</span>
+        <a href="index.html" target="_blank" rel="noopener noreferrer" class="button button-ghost">
+          Ver site <span>↗</span>
+        </a>
+        <button type="button" class="button button-outline" id="logout-btn">
+          Sair
+        </button>
+      </div>
+    </header>
+
+    <main class="admin-main">
+      <!-- Barra de feedback global (sucesso / erro) -->
+      <div class="alert-box" id="admin-feedback" role="status" aria-live="polite" hidden></div>
+
+      <!-- Cabeçalho do Dashboard -->
+      <section class="dashboard-intro">
+        <div>
+          <div class="section-kicker">VISÃO GERAL DA CLÍNICA</div>
+          <h1 id="stat-clinic-name">Clínica</h1>
+        </div>
+        <div class="role-pill" id="stat-user-role">Função: —</div>
+      </section>
+
+      <!-- Cards de Indicadores (KPIs) -->
+      <section class="kpi-grid" aria-label="Resumo operacional">
+        <article class="kpi-card kpi-highlight">
+          <span class="kpi-label">SOLICITAÇÕES PENDENTES</span>
+          <strong class="kpi-value" id="stat-pending-count">0</strong>
+          <small class="kpi-hint">Aguardando retorno da equipe</small>
+        </article>
+
+        <article class="kpi-card">
+          <span class="kpi-label">PROFISSIONAIS ATIVOS</span>
+          <strong class="kpi-value" id="stat-professionals-count">0</strong>
+          <small class="kpi-hint">Corpo clínico cadastrado</small>
+        </article>
+
+        <article class="kpi-card">
+          <span class="kpi-label">ESPECIALIDADES</span>
+          <strong class="kpi-value" id="stat-specialties-count">0</strong>
+          <small class="kpi-hint">Áreas de atendimento</small>
+        </article>
+      </section>
+
+      <!-- Navegação entre Módulos -->
+      <nav class="admin-tabs" aria-label="Módulos administrativos">
+        <button type="button" class="tab-btn active" data-tab="appointments">
+          Agendamentos
+        </button>
+        <button type="button" class="tab-btn" data-tab="professionals">
+          Profissionais
+        </button>
+        <button type="button" class="tab-btn" data-tab="specialties">
+          Especialidades
+        </button>
+      </nav>
+
+      <!-- MÓDULO 1: AGENDAMENTOS -->
+      <section class="module-panel" id="panel-appointments">
+        <div class="panel-header">
+          <div>
+            <h2>Solicitações de Agendamento</h2>
+            <p>Acompanhe os pedidos recebidos e atualize o status de atendimento.</p>
+          </div>
+
+          <div class="panel-actions">
+            <select id="appointment-status-filter" aria-label="Filtrar por status">
+              <option value="all">Todos os status</option>
+              <option value="pending">Pendentes</option>
+              <option value="confirmed">Confirmados</option>
+              <option value="completed">Concluídos</option>
+              <option value="cancelled">Cancelados</option>
+            </select>
+            <button type="button" class="button button-outline" id="refresh-appointments-btn">
+              Atualizar lista
+            </button>
+          </div>
+        </div>
+
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Paciente</th>
+                <th>Telefone</th>
+                <th>Especialidade</th>
+                <th>Data solicitada</th>
+                <th>Status atual</th>
+                <th>Alterar status</th>
+              </tr>
+            </thead>
+            <tbody id="appointments-list">
+              <tr>
+                <td colspan="6" class="empty-state">Carregando solicitações...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- MÓDULO 2: PROFISSIONAIS -->
+      <section class="module-panel" id="panel-professionals" hidden>
+        <div class="panel-header">
+          <div>
+            <h2>Corpo Clínico e Profissionais</h2>
+            <p>Cadastre novos profissionais ou remova registros da clínica.</p>
+          </div>
+        </div>
+
+        <div class="split-layout">
+          <form class="card-form" id="professional-form">
+            <h3>Cadastrar profissional</h3>
+
+            <div class="field-group">
+              <label for="pro-name">Nome completo *</label>
+              <input id="pro-name" name="name" type="text" placeholder="Ex.: Dra. Helena Souza" required>
+            </div>
+
+            <div class="field-group">
+              <label for="pro-specialty">Especialidade</label>
+              <select id="pro-specialty" name="specialty_id">
+                <option value="">Selecione uma especialidade (opcional)</option>
+              </select>
+            </div>
+
+            <button type="submit" class="button button-primary button-full" id="pro-submit-btn">
+              Salvar profissional <span>＋</span>
+            </button>
+          </form>
+
+          <div class="list-card">
+            <h3>Profissionais cadastrados</h3>
+            <div class="items-list" id="professionals-list">
+              <p class="empty-state">Carregando profissionais...</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- MÓDULO 3: ESPECIALIDADES -->
+      <section class="module-panel" id="panel-specialties" hidden>
+        <div class="panel-header">
+          <div>
+            <h2>Especialidades Médicas</h2>
+            <p>Gerencie as especialidades oferecidas pela sua clínica.</p>
+          </div>
+        </div>
+
+        <div class="split-layout">
+          <form class="card-form" id="specialty-form">
+            <h3>Cadastrar especialidade</h3>
+
+            <div class="field-group">
+              <label for="spec-name">Nome da especialidade *</label>
+              <input id="spec-name" name="name" type="text" placeholder="Ex.: Cardiologia" required>
+            </div>
+
+            <div class="field-group">
+              <label for="spec-description">Descrição breve</label>
+              <textarea
+                id="spec-description"
+                name="description"
+                rows="3"
+                placeholder="Ex.: Prevenção e acompanhamento da saúde cardiovascular."
+              ></textarea>
+            </div>
+
+            <button type="submit" class="button button-primary button-full" id="spec-submit-btn">
+              Salvar especialidade <span>＋</span>
+            </button>
+          </form>
+
+          <div class="list-card">
+            <h3>Especialidades cadastradas</h3>
+            <div class="items-list" id="specialties-list">
+              <p class="empty-state">Carregando especialidades...</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- MODAL DE CONFIRMAÇÃO DE EXCLUSÃO -->
+  <div class="modal-backdrop" id="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirm-title" hidden>
+    <div class="modal-card">
+      <div class="section-kicker">CONFIRMAÇÃO NECESSÁRIA</div>
+      <h3 id="confirm-title">Excluir registro?</h3>
+      <p id="confirm-message">Tem certeza que deseja excluir este item? Esta ação não poderá ser desfeita.</p>
+      <div class="modal-actions">
+        <button type="button" class="button button-outline" id="confirm-cancel-btn">Cancelar</button>
+        <button type="button" class="button button-danger" id="confirm-accept-btn">Sim, excluir</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Biblioteca oficial Supabase JS v2 -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Configuração centralizada -->
+  <script src="config.js"></script>
+  <!-- Lógica administrativa -->
+  <script src="admin.js"></script>
+</body>
+</html>
