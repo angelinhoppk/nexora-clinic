@@ -1,5 +1,5 @@
 (() => {
-  const config = window.NEXORA_CLINIC_CONFIG || {};
+  const config = window.LAVRA_CLINIC_CONFIG || {};
 
   // --- Utilitários de validação e segurança ---
 
@@ -120,8 +120,8 @@
       }
     }
 
-    const developerName = meta.developerName || "NEXORA";
-    setTextAll('[data-config="developer-name"]', developerName);
+    const developerName = meta.developerName || "Lavra";
+    setTextAll('[data-config="developer-name"]', developerName.toUpperCase());
 
     const clinicName = clinic.name || "Clínica Aurora";
     setTextAll('[data-config="brand-prefix"]', clinic.brandPrefix ?? "clínica", true);
@@ -487,7 +487,7 @@
     applyBookingTexts();
     loadClinicDataFromDatabase().catch((err) => {
       // Mantém o conteúdo do config.js na tela; o envio fica indisponível até recarregar
-      console.warn("[NEXORA Clinic]", err.message);
+      console.warn("[Lavra Clinic]", err.message);
     });
   }
 

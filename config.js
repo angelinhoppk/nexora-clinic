@@ -1,5 +1,5 @@
 /**
- * NEXORA Clinic — Configuração White-Label Centralizada
+ * Lavra Clinic — Configuração White-Label Centralizada
  * ---------------------------------------------------------------------------
  * Edite apenas este arquivo para personalizar o site para uma nova clínica.
  * Mantenha URLs externas válidas (https://) e cores em formato hexadecimal.
@@ -7,11 +7,11 @@
  * AVISO: Os dados abaixo são demonstrativos/fictícios. Substitua por dados
  * reais e autorizados da clínica contratante antes da publicação em produção.
  */
-window.NEXORA_CLINIC_CONFIG = {
+window.LAVRA_CLINIC_CONFIG = {
   meta: {
     // Exibir ou ocultar a barra superior de demonstração ("PROJETO DEMONSTRATIVO...")
     showDemoBanner: true,
-    developerName: "NEXORA",
+    developerName: "Lavra",
     copyrightYear: "2026"
   },
 
@@ -25,7 +25,7 @@ window.NEXORA_CLINIC_CONFIG = {
     // Metadados da página
     pageTitle: "Clínica Aurora | Cuidado que acolhe",
     description:
-      "Clínica Aurora — cuidado médico próximo, humano e integrado. Projeto demonstrativo desenvolvido pela NEXORA."
+      "Clínica Aurora — cuidado médico próximo, humano e integrado. Projeto demonstrativo desenvolvido pela Lavra."
   },
 
   logo: {

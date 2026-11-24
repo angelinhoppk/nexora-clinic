@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const config = window.NEXORA_CLINIC_CONFIG || {};
+  const config = window.LAVRA_CLINIC_CONFIG || {};
 
   // --- Estado privado em memória (nunca confia em clinic_id da URL ou localStorage) ---
   const state = {
@@ -372,7 +372,7 @@
 
   function updateDashboardHeaderAndStats() {
     const clinicName = state.clinic ? state.clinic.name : "Clínica";
-    document.title = `Painel — ${clinicName} | NEXORA Clinic`;
+    document.title = `Painel — ${clinicName} | Lavra Clinic`;
 
     el.headerClinicName.textContent = clinicName;
     el.statClinicName.textContent = clinicName;

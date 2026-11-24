@@ -1,4 +1,4 @@
-// NEXORA Clinic — Edge Function pública de agendamento
+// Lavra Clinic — Edge Function pública de agendamento
 // ---------------------------------------------------------------------------
 // GET  ?clinic=<slug>  → dados públicos da clínica (nome, especialidades, profissionais)
 // POST { clinic, name, email, phone, specialty_id, preferred_date, message } → cria solicitação
