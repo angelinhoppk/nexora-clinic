@@ -148,9 +148,13 @@ window.NEXORA_CLINIC_CONFIG = {
   ],
 
   booking: {
-    // "demo": valida apenas no navegador sem enviar ou armazenar dados.
-    // Preparado para futura integração com serviço externo ("api").
-    mode: "demo",
+    // "supabase": especialidades, profissionais e agendamentos vêm do banco da clínica
+    //             (via Edge Function "public-booking", com validação no servidor).
+    // "demo":     valida apenas no navegador, sem enviar ou armazenar dados.
+    // "api":      envia para um serviço externo próprio em endpointUrl.
+    mode: "supabase",
+    // Identificador público da clínica no banco (coluna "slug" da tabela clinics)
+    clinicSlug: "clinica-aurora-demo",
     endpointUrl: ""
   },
 

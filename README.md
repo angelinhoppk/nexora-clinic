@@ -8,7 +8,7 @@ Plataforma web responsiva para clínicas médicas desenvolvida pela **NEXORA**, 
 - `index.html`: Estrutura semântica da página institucional pública.
 - `styles.css`: Estilos responsivos e variáveis CSS personalizáveis do site público.
 - `config.js`: Configuração centralizada da clínica (marca, logotipo, cores, contatos, especialidades, profissionais e credenciais públicas do Supabase).
-- `script.js`: Aplicação segura das configurações via DOM, navegação mobile e validação demonstrativa do formulário público.
+- `script.js`: Aplicação segura das configurações via DOM, navegação mobile, carregamento das especialidades e profissionais do banco e envio do agendamento público.
 
 ### Painel Administrativo (Restrito)
 - `admin.html`: Tela de login administrativo e painel de gestão (Dashboard, Agendamentos, Profissionais e Especialidades).
@@ -42,7 +42,8 @@ Plataforma web responsiva para clínicas médicas desenvolvida pela **NEXORA**, 
 
 - **Isolamento por clínica:** Todas as tabelas (`clinics`, `clinic_members`, `specialties`, `professionals` e `appointments`) operam com **Row Level Security (RLS)** ativado.
 - **Identificação segura da clínica:** O painel nunca confia em parâmetros de URL ou armazenamento local para definir o `clinic_id`. Após o login, `admin.js` consulta `clinic_members` usando o `user_id` autenticado e obtém o `clinic_id` autorizado diretamente do banco.
-- **Formulário público (`index.html`):** Mantido intencionalmente em modo demonstrativo (`booking.mode: "demo"`), sem gravação direta na tabela `appointments`. A gravação pública será realizada futuramente por meio de uma **Supabase Edge Function** com validação no servidor.
+- **Agendamento público (`index.html`):** com `booking.mode: "supabase"`, o site fala apenas com a Edge Function `public-booking` (código em `supabase/functions/public-booking/`). Ela identifica a clínica pelo `booking.clinicSlug`, devolve só dados públicos (nome, especialidades, profissionais) e grava solicitações após validar tudo no servidor (campos, data, especialidade da própria clínica, limite de envios por telefone e campo-armadilha contra robôs). O visitante não tem permissão de leitura nem de escrita direta nas tabelas.
+- **Exclusões:** somente usuários com papel `admin` em `clinic_members` podem excluir registros (regra garantida pelo RLS).
 
 ## Créditos
 

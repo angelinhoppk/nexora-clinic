@@ -56,8 +56,8 @@
         <div><p>Acreditamos que cuidar da saúde começa por ouvir. Por isso, reunimos diferentes especialidades em um ambiente acolhedor, com atenção aos detalhes e respeito à história de cada pessoa.</p><a class="under-link" href="#equipe">Conheça nossa equipe <span>↗</span></a></div>
       </div>
       <div class="stats">
-        <div><strong>12<span>+</span></strong><small>Especialidades</small></div>
-        <div><strong>08</strong><small>Profissionais</small></div>
+        <div><strong data-config="stat-specialties">12<span>+</span></strong><small>Especialidades</small></div>
+        <div><strong data-config="stat-professionals">08</strong><small>Profissionais</small></div>
         <div><strong>01</strong><small>Propósito: cuidar</small></div>
       </div>
     </section>
@@ -84,17 +84,19 @@
     </section>
 
     <section class="appointment section" id="agendamento">
-      <div class="appointment-copy"><div class="section-kicker">04 — SEU PRÓXIMO PASSO</div><h2>Vamos cuidar<br><em>de você?</em></h2><p>Preencha os dados abaixo para simular uma solicitação de consulta. Nesta demonstração, nenhuma informação é enviada ou armazenada.</p><div class="appointment-detail"><span>✳</span><div><strong>Atendimento com atenção</strong><small>Nossa equipe fictícia está pronta para receber sua solicitação demonstrativa.</small></div></div></div>
-      <form class="appointment-form" id="appointment-form">
-        <div class="form-title"><span>FORMULÁRIO DE DEMONSTRAÇÃO</span><strong>Solicite um horário</strong></div>
+      <div class="appointment-copy"><div class="section-kicker">04 — SEU PRÓXIMO PASSO</div><h2>Vamos cuidar<br><em>de você?</em></h2><p data-booking-text="intro">Preencha os dados abaixo para simular uma solicitação de consulta. Nesta demonstração, nenhuma informação é enviada ou armazenada.</p><div class="appointment-detail"><span>✳</span><div><strong>Atendimento com atenção</strong><small data-booking-text="detail">Nossa equipe fictícia está pronta para receber sua solicitação demonstrativa.</small></div></div></div>
+      <form class="appointment-form" id="appointment-form" novalidate>
+        <div class="form-title"><span data-booking-text="kicker">FORMULÁRIO DE DEMONSTRAÇÃO</span><strong>Solicite um horário</strong></div>
+        <div class="hp-field" aria-hidden="true"><label for="website">Não preencha este campo</label><input id="website" name="website" type="text" tabindex="-1" autocomplete="off"></div>
         <label for="name">Nome completo</label><input id="name" name="name" type="text" placeholder="Como podemos chamar você?" required>
         <div class="form-row"><div><label for="email">E-mail</label><input id="email" name="email" type="email" placeholder="voce@email.com" required></div><div><label for="phone">Telefone</label><input id="phone" name="phone" type="tel" placeholder="(11) 99999-9999" required></div></div>
         <label for="specialty">Especialidade</label><select id="specialty" name="specialty" required><option value="">Selecione uma especialidade</option><option>Cardiologia</option><option>Dermatologia</option><option>Endocrinologia</option><option>Pediatria</option><option>Neurologia</option><option>Clínica geral</option></select>
         <label for="date">Data desejada</label><input id="date" name="date" type="date" required>
-        <label class="consent"><input type="checkbox" required> <span>Entendi que este é um formulário demonstrativo e que os dados não serão enviados.</span></label>
-        <button class="button button-primary submit-button" type="submit">Simular solicitação <span>↗</span></button>
+        <label for="message">Observações <span class="optional-label">(opcional)</span></label><textarea id="message" name="message" rows="3" maxlength="500" placeholder="Algo que a equipe deve saber? Ex.: melhor horário para contato."></textarea>
+        <label class="consent"><input id="consent" type="checkbox" required> <span data-booking-text="consent">Entendi que este é um formulário demonstrativo e que os dados não serão enviados.</span></label>
+        <button class="button button-primary submit-button" type="submit"><span data-booking-text="submit">Simular solicitação</span> <span>↗</span></button>
         <p class="form-feedback" id="form-feedback" role="status" aria-live="polite"></p>
-        <small class="privacy-note">Não informe dados reais. Este projeto é apenas uma demonstração de interface.</small>
+        <small class="privacy-note" data-booking-text="privacy">Não informe dados reais. Este projeto é apenas uma demonstração de interface.</small>
       </form>
     </section>
 

@@ -254,8 +254,21 @@
 
   // --- 4. Especialidades e Profissionais dinâmicos (construção segura via DOM) ---
 
-  function renderSpecialties() {
-    const specialties = Array.isArray(config.specialties) ? config.specialties : [];
+  // Normaliza nomes para comparar dados do banco com os visuais do config.js (ícones, fotos)
+  function normalizeName(value) {
+    return String(value || "")
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .toLowerCase()
+      .trim();
+  }
+
+  function renderSpecialties(list) {
+    const specialties = Array.isArray(list)
+      ? list
+      : Array.isArray(config.specialties)
+        ? config.specialties
+        : [];
     if (specialties.length === 0) return;
 
     const grid = document.querySelector('[data-config="specialty-grid"]');
@@ -285,8 +298,8 @@
         link.setAttribute("aria-label", `Agendar ${(item.name || "").toLowerCase()}`);
         link.textContent = "↗";
         link.addEventListener("click", () => {
-          if (select && item.name) {
-            select.value = item.name;
+          if (select && (item.id || item.name)) {
+            select.value = item.id || item.name;
           }
         });
 
@@ -305,17 +318,30 @@
       specialties.forEach((item) => {
         if (!item.name) return;
         const opt = document.createElement("option");
-        opt.value = item.name;
+        // Com dados do banco, o valor é o id da especialidade; no modo demo, o nome
+        opt.value = item.id || item.name;
         opt.textContent = item.name;
         select.appendChild(opt);
       });
     }
   }
 
-  function renderProfessionals() {
-    const professionals = Array.isArray(config.professionals)
-      ? config.professionals
-      : [];
+  function getInitials(name) {
+    const words = String(name || "")
+      .replace(/^(dra?\.?|dr\.?)\s+/i, "")
+      .split(/\s+/)
+      .filter(Boolean);
+    const first = words[0] ? words[0].charAt(0) : "";
+    const last = words.length > 1 ? words[words.length - 1].charAt(0) : "";
+    return (first + last).toUpperCase() || "+";
+  }
+
+  function renderProfessionals(list) {
+    const professionals = Array.isArray(list)
+      ? list
+      : Array.isArray(config.professionals)
+        ? config.professionals
+        : [];
     const grid = document.querySelector('[data-config="team-grid"]');
     if (!grid || professionals.length === 0) return;
 
@@ -330,6 +356,13 @@
         img.alt = pro.photoAlt || `Retrato ilustrativo de ${pro.name || "profissional"}`;
         img.loading = "lazy";
         card.appendChild(img);
+      } else {
+        // Profissional sem foto cadastrada: exibe as iniciais no lugar da imagem
+        const placeholder = document.createElement("div");
+        placeholder.className = "doctor-photo-placeholder";
+        placeholder.setAttribute("aria-hidden", "true");
+        placeholder.textContent = getInitials(pro.name);
+        card.appendChild(placeholder);
       }
 
       const info = document.createElement("div");
@@ -349,12 +382,114 @@
     });
   }
 
-  // Inicializa camada White-Label
+  // Inicializa camada White-Label (dados do config.js aparecem imediatamente)
   applyThemeColors(config.colors);
   applyBranding();
   applyContactInfo();
   renderSpecialties();
   renderProfessionals();
+
+  // --- 4.1 Dados reais da clínica (Supabase via Edge Function pública) ---
+
+  const booking = config.booking || { mode: "demo" };
+  const supabaseConfig = config.supabase || {};
+  const isSupabaseMode =
+    booking.mode === "supabase" &&
+    isValidHttpUrl(supabaseConfig.url) &&
+    typeof booking.clinicSlug === "string" &&
+    /^[a-z0-9-]{3,60}$/.test(booking.clinicSlug);
+
+  const publicBookingUrl = isSupabaseMode
+    ? `${supabaseConfig.url.trim().replace(/\/+$/, "")}/functions/v1/public-booking`
+    : "";
+
+  function publicRequestHeaders() {
+    const headers = { "Content-Type": "application/json" };
+    if (typeof supabaseConfig.publishableKey === "string" && supabaseConfig.publishableKey.trim()) {
+      headers.apikey = supabaseConfig.publishableKey.trim();
+    }
+    return headers;
+  }
+
+  // Indica se as especialidades do formulário vieram do banco (necessário para enviar)
+  let clinicDataLoaded = false;
+
+  function formatStat(value) {
+    return String(value).padStart(2, "0");
+  }
+
+  async function loadClinicDataFromDatabase() {
+    const url = `${publicBookingUrl}?clinic=${encodeURIComponent(booking.clinicSlug)}`;
+    const response = await fetch(url, { headers: publicRequestHeaders() });
+    if (!response.ok) {
+      throw new Error(`Falha ao carregar dados da clínica (${response.status}).`);
+    }
+    const data = await response.json();
+    const dbSpecialties = Array.isArray(data.specialties) ? data.specialties : [];
+    const dbProfessionals = Array.isArray(data.professionals) ? data.professionals : [];
+
+    // Ícones e fotos ainda vivem no config.js: associamos pelo nome
+    const configSpecialties = Array.isArray(config.specialties) ? config.specialties : [];
+    const configProfessionals = Array.isArray(config.professionals) ? config.professionals : [];
+
+    const specialties = dbSpecialties.map((spec, index) => {
+      const visual = configSpecialties.find((c) => normalizeName(c.name) === normalizeName(spec.name)) || {};
+      return {
+        id: spec.id,
+        name: spec.name,
+        description: spec.description || visual.description || "",
+        icon: visual.icon || "＋",
+        number: String(index + 1).padStart(2, "0")
+      };
+    });
+
+    const specialtyNameById = new Map(dbSpecialties.map((s) => [s.id, s.name]));
+    const professionals = dbProfessionals.map((pro) => {
+      const visual = configProfessionals.find((c) => normalizeName(c.name) === normalizeName(pro.name)) || {};
+      return {
+        name: pro.name,
+        specialty: specialtyNameById.get(pro.specialty_id) || visual.specialty || "",
+        registrationNote: visual.registrationNote || "Corpo clínico",
+        photoUrl: visual.photoUrl || "",
+        photoAlt: visual.photoAlt || `Retrato de ${pro.name}`
+      };
+    });
+
+    if (specialties.length > 0) {
+      renderSpecialties(specialties);
+      clinicDataLoaded = true;
+    }
+    if (professionals.length > 0) {
+      renderProfessionals(professionals);
+    }
+
+    setTextAll('[data-config="stat-specialties"]', formatStat(specialties.length));
+    setTextAll('[data-config="stat-professionals"]', formatStat(professionals.length));
+  }
+
+  // Textos do formulário de acordo com o modo (demonstração x agendamento real)
+  const bookingTexts = {
+    intro: "Preencha os dados abaixo e nossa equipe entrará em contato para confirmar o melhor horário para você.",
+    detail: "Respondemos às solicitações em horário comercial, pelo telefone ou e-mail informados.",
+    kicker: "SOLICITAÇÃO DE CONSULTA",
+    consent: "Autorizo a clínica a usar estes dados para entrar em contato sobre o meu agendamento.",
+    submit: "Solicitar consulta",
+    privacy: "Seus dados são usados apenas para o contato sobre esta solicitação."
+  };
+
+  function applyBookingTexts() {
+    Object.entries(bookingTexts).forEach(([key, text]) => {
+      setTextAll(`[data-booking-text="${key}"]`, text);
+    });
+  }
+
+  if (isSupabaseMode) {
+    applyBookingTexts();
+    loadClinicDataFromDatabase().catch((err) => {
+      // Mantém o conteúdo do config.js na tela; o envio fica indisponível até recarregar
+      console.warn("[NEXORA Clinic]", err.message);
+    });
+  }
 
   // --- 5. Navegação mobile (funcionalidade preservada) ---
 
@@ -377,7 +512,7 @@
     });
   }
 
-  // --- 6. Formulário preparado para futura integração ---
+  // --- 6. Formulário de agendamento ---
 
   const dateInput = document.querySelector("#date");
   const today = new Date();
@@ -390,13 +525,45 @@
   }
 
   /**
-   * Adaptador isolado de envio de solicitação.
-   * LIMITAÇÃO ATUAL: No modo "demo", nenhum dado é transmitido ou armazenado.
-   * Para integração futura com API/CRM real, configure `config.booking.mode = "api"`
-   * e `config.booking.endpointUrl`, implementando o `fetch` abaixo.
+   * Envia a solicitação conforme o modo configurado em config.booking.mode:
+   * - "supabase": Edge Function "public-booking" (valida e grava no banco da clínica).
+   * - "api": endpoint externo próprio em config.booking.endpointUrl.
+   * - "demo": nada é transmitido ou armazenado.
    */
   async function processAppointmentSubmission(payload) {
-    const booking = config.booking || { mode: "demo", endpointUrl: "" };
+    if (isSupabaseMode) {
+      if (!clinicDataLoaded) {
+        throw new Error(
+          "O agendamento online está indisponível no momento. Recarregue a página ou fale conosco pelo WhatsApp."
+        );
+      }
+
+      let response;
+      try {
+        response = await fetch(publicBookingUrl, {
+          method: "POST",
+          headers: publicRequestHeaders(),
+          body: JSON.stringify({ clinic: booking.clinicSlug, ...payload })
+        });
+      } catch {
+        throw new Error("Não foi possível conectar. Verifique sua internet e tente novamente.");
+      }
+
+      let result = {};
+      try {
+        result = await response.json();
+      } catch {
+        result = {};
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          result.error ||
+            "Não foi possível concluir a solicitação no momento. Tente novamente ou entre em contato pelos canais abaixo."
+        );
+      }
+      return { delivered: true };
+    }
 
     if (booking.mode === "api" && isValidSafeUrl(booking.endpointUrl)) {
       const response = await fetch(booking.endpointUrl.trim(), {
@@ -405,7 +572,7 @@
         body: JSON.stringify(payload)
       });
       if (!response.ok) {
-        throw new Error(`Falha na integração de agendamento (${response.status}).`);
+        throw new Error("Não foi possível concluir a solicitação no momento. Tente novamente ou entre em contato pelos canais abaixo.");
       }
       return { delivered: true };
     }
@@ -416,29 +583,55 @@
   const form = document.querySelector("#appointment-form");
   const feedback = document.querySelector("#form-feedback");
 
+  function showFormFeedback(message, isError = false) {
+    if (!feedback) return;
+    feedback.textContent = message;
+    feedback.classList.toggle("is-error", isError);
+  }
+
   if (form && feedback) {
+    const submitButton = form.querySelector('button[type="submit"]');
+    let isSubmitting = false;
+
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
+      if (isSubmitting) return;
 
       if (!form.reportValidity()) return;
 
+      const specialtySelect = document.querySelector("#specialty");
+      const specialtyLabel =
+        specialtySelect && specialtySelect.selectedIndex >= 0
+          ? specialtySelect.options[specialtySelect.selectedIndex].textContent
+          : "";
+      const messageInput = document.querySelector("#message");
+      const honeypot = document.querySelector("#website");
+
       const payload = {
-        clinic: (config.clinic && config.clinic.name) || "Clínica Aurora",
         name: document.querySelector("#name").value.trim(),
         email: document.querySelector("#email").value.trim(),
         phone: document.querySelector("#phone").value.trim(),
-        specialty: document.querySelector("#specialty").value,
-        preferredDate: dateInput ? dateInput.value : "",
-        submittedAt: new Date().toISOString()
+        specialty_id: specialtySelect ? specialtySelect.value : "",
+        preferred_date: dateInput ? dateInput.value : "",
+        message: messageInput ? messageInput.value.trim() : "",
+        website: honeypot ? honeypot.value : ""
       };
+
+      isSubmitting = true;
+      if (submitButton) submitButton.disabled = true;
+      showFormFeedback("Enviando sua solicitação...");
 
       try {
         const result = await processAppointmentSubmission(payload);
 
         if (result.delivered) {
-          feedback.textContent = `Solicitação recebida, ${payload.name}! Nossa equipe entrará em contato para confirmar o horário em ${payload.specialty}.`;
+          showFormFeedback(
+            `Solicitação recebida, ${payload.name}! Nossa equipe entrará em contato para confirmar o horário em ${specialtyLabel}.`
+          );
         } else {
-          feedback.textContent = `Demonstração concluída, ${payload.name}! Sua solicitação de ${payload.specialty} foi validada apenas nesta página. Nenhum dado foi enviado ou armazenado.`;
+          showFormFeedback(
+            `Demonstração concluída, ${payload.name}! Sua solicitação de ${specialtyLabel} foi validada apenas nesta página. Nenhum dado foi enviado ou armazenado.`
+          );
         }
 
         form.reset();
@@ -446,8 +639,10 @@
           dateInput.min = localToday;
         }
       } catch (err) {
-        feedback.textContent =
-          "Não foi possível concluir a solicitação no momento. Tente novamente ou entre em contato pelos canais abaixo.";
+        showFormFeedback(err.message, true);
+      } finally {
+        isSubmitting = false;
+        if (submitButton) submitButton.disabled = false;
       }
     });
   }
