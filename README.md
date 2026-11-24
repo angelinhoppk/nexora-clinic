@@ -1,6 +1,6 @@
-# Lavra Clinic — Plataforma SaaS White-Label para Clínicas
+# Feitiva Clinic — Plataforma SaaS White-Label para Clínicas
 
-Plataforma web responsiva para clínicas médicas desenvolvida pela **Lavra**, composta por um site institucional white-label e um painel administrativo integrado ao **Supabase** (PostgreSQL, Auth e Row Level Security).
+Plataforma web responsiva para clínicas médicas desenvolvida pela **Feitiva**, composta por um site institucional white-label e um painel administrativo integrado ao **Supabase** (PostgreSQL, Auth e Row Level Security).
 
 ## Estrutura do projeto
 
@@ -27,7 +27,7 @@ Plataforma web responsiva para clínicas médicas desenvolvida pela **Lavra**, c
 ## Como personalizar a identidade visual (White-Label)
 
 1. Abra o arquivo `config.js`.
-2. Altere os campos em `window.LAVRA_CLINIC_CONFIG`:
+2. Altere os campos em `window.FEITIVA_CLINIC_CONFIG`:
    - `clinic`: nome da clínica, composição do logotipo textual, título e descrição SEO.
    - `logo`: escolha entre monograma (`type: "monogram"`) ou imagem externa/local (`type: "image"` com `imageUrl`).
    - `colors`: cores primárias e secundárias em hexadecimal (`#102b46`, etc.), aplicadas automaticamente tanto no site público quanto no painel administrativo.
@@ -47,4 +47,4 @@ Plataforma web responsiva para clínicas médicas desenvolvida pela **Lavra**, c
 
 ## Créditos
 
-Produto desenvolvido pela **Lavra**.
+Produto desenvolvido pela **Feitiva**.

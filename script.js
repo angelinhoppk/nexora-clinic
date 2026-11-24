@@ -1,5 +1,5 @@
 (() => {
-  const config = window.LAVRA_CLINIC_CONFIG || {};
+  const config = window.FEITIVA_CLINIC_CONFIG || {};
 
   // --- Utilitários de validação e segurança ---
 
@@ -120,7 +120,7 @@
       }
     }
 
-    const developerName = meta.developerName || "Lavra";
+    const developerName = meta.developerName || "Feitiva";
     setTextAll('[data-config="developer-name"]', developerName.toUpperCase());
 
     const clinicName = clinic.name || "Clínica Aurora";
@@ -487,7 +487,7 @@
     applyBookingTexts();
     loadClinicDataFromDatabase().catch((err) => {
       // Mantém o conteúdo do config.js na tela; o envio fica indisponível até recarregar
-      console.warn("[Lavra Clinic]", err.message);
+      console.warn("[Feitiva Clinic]", err.message);
     });
   }
 
