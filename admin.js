@@ -77,7 +77,24 @@
     recoveryConfirm: document.getElementById("recovery-confirm"),
     recoveryFeedback: document.getElementById("recovery-feedback"),
     recoverySubmit: document.getElementById("recovery-submit"),
-    adminNotes: document.querySelectorAll("[data-admin-note]")
+    adminNotes: document.querySelectorAll("[data-admin-note]"),
+
+    apptModal: document.getElementById("appointment-modal"),
+    apptForm: document.getElementById("appointment-form"),
+    apptKicker: document.getElementById("appt-modal-kicker"),
+    apptTitle: document.getElementById("appt-modal-title"),
+    apptSummary: document.getElementById("appt-modal-summary"),
+    apptSlotFields: document.getElementById("appt-slot-fields"),
+    apptProfessional: document.getElementById("appt-professional"),
+    apptDate: document.getElementById("appt-date"),
+    apptTime: document.getElementById("appt-time"),
+    apptDuration: document.getElementById("appt-duration"),
+    apptReasonGroup: document.getElementById("appt-reason-group"),
+    apptReasonLabel: document.getElementById("appt-reason-label"),
+    apptReason: document.getElementById("appt-reason"),
+    apptFeedback: document.getElementById("appt-modal-feedback"),
+    apptCancelBtn: document.getElementById("appt-modal-cancel"),
+    apptSubmitBtn: document.getElementById("appt-modal-submit")
   };
 
   // --- 1. Identidade Visual White-Label no Painel ---
@@ -190,7 +207,8 @@
       completed: { label: "Concluído", cssClass: "status-completed" },
       concluido: { label: "Concluído", cssClass: "status-completed" },
       cancelled: { label: "Cancelado", cssClass: "status-cancelled" },
-      cancelado: { label: "Cancelado", cssClass: "status-cancelled" }
+      cancelado: { label: "Cancelado", cssClass: "status-cancelled" },
+      no_show: { label: "Não compareceu", cssClass: "status-noshow" }
     };
     return map[normalized] || { label: status || "Pendente", cssClass: "status-pending" };
   }
@@ -205,6 +223,9 @@
     const msg = String(error.message || "").toLowerCase();
     const code = String(error.code || "");
 
+    if (code === "P0001" || code === "P0002") {
+      return error.message;
+    }
     if (msg.includes("invalid login credentials")) {
       return "E-mail ou senha incorretos. Verifique seus dados e tente novamente.";
     }
@@ -442,15 +463,16 @@
 
     const { data, error } = await state.supabase
       .from("appointments")
-      .select("id, clinic_id, patient_name, patient_phone, patient_email, specialty_id, preferred_date, message, status, created_at")
+      .select("id, clinic_id, patient_name, patient_phone, patient_email, specialty_id, preferred_date, message, status, status_reason, professional_id, starts_at, ends_at, created_at")
       .eq("clinic_id", clinicId)
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(500);
 
     if (error) {
       throw new Error(translateSupabaseError(error, "Erro ao carregar agendamentos."));
     }
 
-    state.appointments = Array.isArray(data) ? data : [];
+    state.appointments = sortAppointments(Array.isArray(data) ? data : []);
     renderAppointments();
   }
 
@@ -458,6 +480,7 @@
     // Carrega especialidades primeiro para mapear specialty_id -> nome
     await loadSpecialties();
     await Promise.all([loadProfessionals(), loadAppointments()]);
+    renderAppointments(); // de novo, agora com os nomes dos profissionais carregados
     updateDashboardHeaderAndStats();
   }
 
@@ -539,55 +562,38 @@
       const tdSpec = document.createElement("td");
       tdSpec.textContent = getSpecialtyNameById(appt.specialty_id);
 
-      // 4. Data solicitada
+      // 4. Consulta: horário marcado pela clínica ou o dia pedido pelo paciente
       const tdDate = document.createElement("td");
-      tdDate.textContent = formatDateBR(appt.preferred_date);
+      if (appt.starts_at) {
+        const when = document.createElement("span");
+        when.className = "appt-when";
+        when.textContent = formatDateTimeBR(appt.starts_at);
+        tdDate.appendChild(when);
+        const sub = document.createElement("span");
+        sub.className = "patient-sub";
+        sub.textContent = `${getProfessionalNameById(appt.professional_id)} · ${durationLabel(appt.starts_at, appt.ends_at)}`;
+        tdDate.appendChild(sub);
+      } else {
+        tdDate.textContent = `Pedido para ${formatDateBR(appt.preferred_date)}`;
+      }
 
-      // 5. Badge de Status atual
+      // 5. Status (+ motivo, quando houver)
       const tdBadge = document.createElement("td");
       const badge = document.createElement("span");
       const statusMeta = getStatusMeta(appt.status);
       badge.className = `status-badge ${statusMeta.cssClass}`;
       badge.textContent = statusMeta.label;
       tdBadge.appendChild(badge);
-
-      // 6. Seletor de alteração de status
-      const tdAction = document.createElement("td");
-      const select = document.createElement("select");
-      select.className = "status-select";
-      select.setAttribute("aria-label", `Alterar status de ${appt.patient_name || "paciente"}`);
-
-      const statusOptions = [
-        { value: "pending", label: "Pendente" },
-        { value: "confirmed", label: "Confirmado" },
-        { value: "completed", label: "Concluído" },
-        { value: "cancelled", label: "Cancelado" }
-      ];
-
-      const currentStatus = String(appt.status || "pending").toLowerCase();
-      if (!statusOptions.some((o) => o.value === currentStatus)) {
-        statusOptions.unshift({ value: currentStatus, label: appt.status });
+      if (appt.status_reason) {
+        const reason = document.createElement("span");
+        reason.className = "status-reason";
+        reason.textContent = `Motivo: ${appt.status_reason}`;
+        tdBadge.appendChild(reason);
       }
 
-      statusOptions.forEach((optData) => {
-        const opt = document.createElement("option");
-        opt.value = optData.value;
-        opt.textContent = optData.label;
-        if (optData.value === currentStatus) opt.selected = true;
-        select.appendChild(opt);
-      });
-
-      select.addEventListener("change", async () => {
-        const newStatus = select.value;
-        select.disabled = true;
-        try {
-          await handleUpdateAppointmentStatus(appt.id, newStatus);
-        } finally {
-          select.disabled = false;
-        }
-      });
-
-      tdAction.appendChild(select);
+      // 6. Ações permitidas para o status atual
+      const tdAction = document.createElement("td");
+      tdAction.appendChild(buildAppointmentActions(appt));
       tr.append(tdPatient, tdPhone, tdSpec, tdDate, tdBadge, tdAction);
       el.appointmentsList.appendChild(tr);
     });
@@ -679,26 +685,232 @@
 
   // --- 7. Operações de Escrita e Exclusão (Protegidas por Sessão + RLS) ---
 
-  async function handleUpdateAppointmentStatus(appointmentId, newStatus) {
-    try {
-      const { clinicId } = await requireAuthorizedContext();
+  // --- Consultas: confirmar, remarcar, cancelar, concluir, falta ---
+  // Toda mudança passa pela função change_appointment no banco, que valida a
+  // transição, impede dois pacientes no mesmo horário e registra quem alterou.
 
-      const { error } = await state.supabase
-        .from("appointments")
-        .update({ status: newStatus })
-        .eq("id", appointmentId)
-        .eq("clinic_id", clinicId);
+  const CLINIC_TIME_ZONE = "America/Sao_Paulo";
+  const CLINIC_UTC_OFFSET = "-03:00"; // Brasil sem horário de verão desde 2019
 
-      if (error) {
-        throw new Error(translateSupabaseError(error, "Não foi possível atualizar o status do agendamento."));
+  function formatDateTimeBR(iso) {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "Data inválida";
+    const date = d.toLocaleDateString("pt-BR", { timeZone: CLINIC_TIME_ZONE, weekday: "short", day: "2-digit", month: "2-digit" });
+    const time = d.toLocaleTimeString("pt-BR", { timeZone: CLINIC_TIME_ZONE, hour: "2-digit", minute: "2-digit" });
+    return `${date} às ${time}`;
+  }
+
+  function localDateTimeParts(iso) {
+    const d = new Date(iso);
+    const date = d.toLocaleDateString("en-CA", { timeZone: CLINIC_TIME_ZONE });
+    const time = d.toLocaleTimeString("en-GB", { timeZone: CLINIC_TIME_ZONE, hour: "2-digit", minute: "2-digit" });
+    return { date, time };
+  }
+
+  function durationLabel(startIso, endIso) {
+    const minutes = Math.round((new Date(endIso) - new Date(startIso)) / 60000);
+    if (!Number.isFinite(minutes) || minutes <= 0) return "";
+    if (minutes < 60) return `${minutes} min`;
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return m ? `${h}h${String(m).padStart(2, "0")}` : `${h}h`;
+  }
+
+  function getProfessionalNameById(id) {
+    const found = state.professionals.find((p) => p.id === id);
+    return found ? found.name : "Profissional removido";
+  }
+
+  function appointmentSortKey(appt) {
+    if (appt.starts_at) return new Date(appt.starts_at).getTime();
+    if (appt.preferred_date) return new Date(`${appt.preferred_date}T12:00:00${CLINIC_UTC_OFFSET}`).getTime();
+    return new Date(appt.created_at).getTime();
+  }
+
+  // Abertos (pendentes e confirmados) primeiro, do mais próximo ao mais distante;
+  // depois o histórico, do mais recente ao mais antigo.
+  function sortAppointments(list) {
+    const open = (a) => a.status === "pending" || a.status === "confirmed";
+    return list.slice().sort((a, b) => {
+      if (open(a) !== open(b)) return open(a) ? -1 : 1;
+      return open(a) ? appointmentSortKey(a) - appointmentSortKey(b) : appointmentSortKey(b) - appointmentSortKey(a);
+    });
+  }
+
+  function actionButton(label, className, onClick) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `button button-sm ${className}`;
+    btn.textContent = label;
+    btn.addEventListener("click", onClick);
+    return btn;
+  }
+
+  function buildAppointmentActions(appt) {
+    const wrap = document.createElement("div");
+    wrap.className = "row-actions";
+    const name = appt.patient_name || "paciente";
+
+    if (appt.status === "pending") {
+      wrap.append(
+        actionButton("Confirmar", "button-primary", () => openAppointmentModal(appt, "confirm")),
+        actionButton("Cancelar", "button-outline", () => openAppointmentModal(appt, "cancel"))
+      );
+    } else if (appt.status === "confirmed") {
+      const started = appt.starts_at && new Date(appt.starts_at).getTime() <= Date.now();
+      if (started) {
+        wrap.append(
+          actionButton("Concluir", "button-primary", () => runSimpleAction(appt, "complete", `Marcar a consulta de ${name} como concluída?`)),
+          actionButton("Faltou", "button-outline", () => runSimpleAction(appt, "no_show", `Registrar que ${name} não compareceu?`))
+        );
+      } else {
+        wrap.append(actionButton("Remarcar", "button-outline", () => openAppointmentModal(appt, "reschedule")));
       }
+      wrap.append(actionButton("Cancelar", "button-outline", () => openAppointmentModal(appt, "cancel")));
+    } else {
+      const done = document.createElement("span");
+      done.className = "row-actions-done";
+      done.textContent = "Encerrada";
+      wrap.appendChild(done);
+    }
 
-      await loadAppointments();
-      updateDashboardHeaderAndStats();
-      showAdminFeedback("Status do agendamento atualizado com sucesso.", "success");
+    wrap.querySelectorAll("button").forEach((b) => b.setAttribute("aria-label", `${b.textContent} — ${name}`));
+    return wrap;
+  }
+
+  async function callChangeAppointment(params) {
+    await requireAuthorizedContext();
+    const { error } = await state.supabase.rpc("change_appointment", params);
+    if (error) {
+      throw new Error(translateSupabaseError(error, "Não foi possível atualizar a consulta. Tente novamente."));
+    }
+    await loadAppointments();
+    updateDashboardHeaderAndStats();
+  }
+
+  async function runSimpleAction(appt, action, question) {
+    const ok = await confirmAction(action === "complete" ? "Concluir consulta" : "Registrar falta", question);
+    if (!ok) return;
+    try {
+      await callChangeAppointment({ p_appointment_id: appt.id, p_action: action });
+      showAdminFeedback(action === "complete" ? "Consulta concluída." : "Falta registrada.", "success");
     } catch (err) {
       showAdminFeedback(err.message, "error");
-      renderAppointments();
+    }
+  }
+
+  let modalContext = null;
+
+  function populateProfessionalOptions(appt) {
+    el.apptProfessional.replaceChildren();
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = state.professionals.length ? "Selecione o profissional" : "Cadastre um profissional primeiro";
+    el.apptProfessional.appendChild(placeholder);
+    const matching = state.professionals.filter((p) => appt.specialty_id && p.specialty_id === appt.specialty_id);
+    const others = state.professionals.filter((p) => !matching.includes(p));
+    [[matching, "Da especialidade pedida"], [others, matching.length ? "Outros profissionais" : null]].forEach(([list, label]) => {
+      if (!list.length) return;
+      const parent = label ? document.createElement("optgroup") : el.apptProfessional;
+      if (label) parent.label = label;
+      list.forEach((p) => {
+        const opt = document.createElement("option");
+        opt.value = p.id;
+        opt.textContent = p.name;
+        parent.appendChild(opt);
+      });
+      if (label) el.apptProfessional.appendChild(parent);
+    });
+  }
+
+  function openAppointmentModal(appt, mode) {
+    modalContext = { appt, mode };
+    const name = appt.patient_name || "Paciente";
+    const titles = {
+      confirm: ["CONFIRMAR PEDIDO", "Confirmar consulta", "Confirmar consulta"],
+      reschedule: ["REMARCAR", "Remarcar consulta", "Salvar novo horário"],
+      cancel: ["CANCELAR", "Cancelar consulta", "Cancelar consulta"]
+    }[mode];
+    el.apptKicker.textContent = titles[0];
+    el.apptTitle.textContent = titles[1];
+    el.apptSubmitBtn.textContent = titles[2];
+    el.apptSubmitBtn.className = `button ${mode === "cancel" ? "button-danger" : "button-primary"}`;
+
+    const spec = getSpecialtyNameById(appt.specialty_id);
+    el.apptSummary.textContent = appt.starts_at
+      ? `${name} · ${spec} · marcada para ${formatDateTimeBR(appt.starts_at)}`
+      : `${name} · ${spec} · pediu ${formatDateBR(appt.preferred_date)}`;
+
+    const needsSlot = mode !== "cancel";
+    el.apptSlotFields.hidden = !needsSlot;
+    el.apptReasonGroup.hidden = mode === "confirm";
+    el.apptReasonLabel.textContent = mode === "cancel" ? "Motivo do cancelamento *" : "Motivo da remarcação *";
+    el.apptReason.value = "";
+    el.apptFeedback.hidden = true;
+
+    if (needsSlot) {
+      populateProfessionalOptions(appt);
+      if (appt.starts_at) {
+        const parts = localDateTimeParts(appt.starts_at);
+        el.apptDate.value = parts.date;
+        el.apptTime.value = parts.time;
+        el.apptProfessional.value = appt.professional_id || "";
+        const mins = String(Math.round((new Date(appt.ends_at) - new Date(appt.starts_at)) / 60000));
+        if ([...el.apptDuration.options].some((o) => o.value === mins)) el.apptDuration.value = mins;
+      } else {
+        el.apptDate.value = appt.preferred_date || "";
+        el.apptTime.value = "";
+        el.apptDuration.value = "30";
+      }
+      el.apptDate.min = new Date().toLocaleDateString("en-CA", { timeZone: CLINIC_TIME_ZONE });
+    }
+
+    el.apptModal.hidden = false;
+    (needsSlot ? el.apptProfessional : el.apptReason).focus();
+  }
+
+  function closeAppointmentModal() {
+    el.apptModal.hidden = true;
+    modalContext = null;
+  }
+
+  async function handleAppointmentModalSubmit(event) {
+    event.preventDefault();
+    if (!modalContext) return;
+    const { appt, mode } = modalContext;
+    const showError = (msg) => {
+      el.apptFeedback.textContent = msg;
+      el.apptFeedback.hidden = false;
+    };
+
+    const reason = el.apptReason.value.trim();
+    const params = { p_appointment_id: appt.id, p_action: mode, p_reason: reason || null };
+
+    if (mode !== "cancel") {
+      if (!el.apptProfessional.value) return showError("Escolha o profissional.");
+      if (!el.apptDate.value || !el.apptTime.value) return showError("Informe a data e o horário.");
+      const startsAt = `${el.apptDate.value}T${el.apptTime.value}:00${CLINIC_UTC_OFFSET}`;
+      if (new Date(startsAt).getTime() < Date.now()) return showError("Escolha um horário que ainda não passou.");
+      params.p_professional_id = el.apptProfessional.value;
+      params.p_starts_at = startsAt;
+      params.p_duration_minutes = Number(el.apptDuration.value);
+    }
+    if (mode !== "confirm" && !reason) return showError("Informe o motivo.");
+
+    el.apptSubmitBtn.disabled = true;
+    try {
+      await callChangeAppointment(params);
+      closeAppointmentModal();
+      const messages = {
+        confirm: "Consulta confirmada.",
+        reschedule: "Consulta remarcada.",
+        cancel: "Consulta cancelada. O horário ficou livre."
+      };
+      showAdminFeedback(messages[mode], "success");
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      el.apptSubmitBtn.disabled = false;
     }
   }
 
@@ -1048,6 +1260,14 @@
     el.forgotBackBtn.addEventListener("click", () => showLoginPanel("login"));
     el.forgotForm.addEventListener("submit", handleForgotSubmit);
     el.recoveryForm.addEventListener("submit", handleRecoverySubmit);
+    el.apptForm.addEventListener("submit", handleAppointmentModalSubmit);
+    el.apptCancelBtn.addEventListener("click", closeAppointmentModal);
+    el.apptModal.addEventListener("click", (event) => {
+      if (event.target === el.apptModal) closeAppointmentModal();
+    });
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && !el.apptModal.hidden) closeAppointmentModal();
+    });
 
     state.supabase = initSupabaseClient();
     if (!state.supabase) return;

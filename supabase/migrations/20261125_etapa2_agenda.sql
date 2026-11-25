@@ -1,0 +1,3 @@
+-- Etapa 2 (aplicada em 25/11/2026 via Supabase MCP): horário/profissional na confirmação,
+-- trava contra conflito, status "no_show", histórico e função change_appointment.
+-- O SQL completo está no histórico de migrações do Supabase: etapa2_agenda_confirmacao_historico.

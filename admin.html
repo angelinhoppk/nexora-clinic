@@ -190,6 +190,7 @@
               <option value="confirmed">Confirmados</option>
               <option value="completed">Concluídos</option>
               <option value="cancelled">Cancelados</option>
+              <option value="no_show">Não compareceu</option>
             </select>
             <button type="button" class="button button-outline" id="refresh-appointments-btn">
               Atualizar lista
@@ -204,9 +205,9 @@
                 <th>Paciente</th>
                 <th>Telefone</th>
                 <th>Especialidade</th>
-                <th>Data solicitada</th>
-                <th>Status atual</th>
-                <th>Alterar status</th>
+                <th>Consulta</th>
+                <th>Status</th>
+                <th>Ações</th>
               </tr>
             </thead>
             <tbody id="appointments-list">
@@ -314,6 +315,58 @@
         <button type="button" class="button button-danger" id="confirm-accept-btn">Sim, excluir</button>
       </div>
     </div>
+  </div>
+
+  <!-- Confirmar, remarcar ou cancelar uma consulta -->
+  <div class="modal-backdrop" id="appointment-modal" role="dialog" aria-modal="true" aria-labelledby="appt-modal-title" hidden>
+    <form class="modal-card modal-card-wide" id="appointment-form" novalidate>
+      <div class="section-kicker" id="appt-modal-kicker">CONSULTA</div>
+      <h3 id="appt-modal-title">Confirmar consulta</h3>
+      <p id="appt-modal-summary"></p>
+
+      <div class="modal-fields" id="appt-slot-fields">
+        <div class="field-group">
+          <label for="appt-professional">Profissional *</label>
+          <select id="appt-professional" required></select>
+        </div>
+        <div class="field-row">
+          <div class="field-group">
+            <label for="appt-date">Data *</label>
+            <input id="appt-date" type="date" required>
+          </div>
+          <div class="field-group">
+            <label for="appt-time">Horário *</label>
+            <input id="appt-time" type="time" step="300" required>
+          </div>
+          <div class="field-group">
+            <label for="appt-duration">Duração</label>
+            <select id="appt-duration">
+              <option value="15">15 min</option>
+              <option value="20">20 min</option>
+              <option value="30" selected>30 min</option>
+              <option value="40">40 min</option>
+              <option value="45">45 min</option>
+              <option value="60">1 hora</option>
+              <option value="90">1h30</option>
+              <option value="120">2 horas</option>
+            </select>
+          </div>
+        </div>
+        <p class="form-hint">Horário de Brasília.</p>
+      </div>
+
+      <div class="field-group" id="appt-reason-group">
+        <label for="appt-reason" id="appt-reason-label">Motivo *</label>
+        <textarea id="appt-reason" rows="3" maxlength="300"></textarea>
+      </div>
+
+      <div class="alert-box alert-error" id="appt-modal-feedback" role="alert" hidden></div>
+
+      <div class="modal-actions">
+        <button type="button" class="button button-outline" id="appt-modal-cancel">Voltar</button>
+        <button type="submit" class="button button-primary" id="appt-modal-submit">Confirmar consulta</button>
+      </div>
+    </form>
   </div>
 
   <!-- Biblioteca oficial Supabase JS v2 -->
