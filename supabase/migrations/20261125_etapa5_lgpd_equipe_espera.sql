@@ -1,0 +1,6 @@
+-- Etapa 5 (aplicada em 25/11/2026 via Supabase MCP, migração "etapa5_lgpd_equipe_espera"):
+-- appointments.consent_at / consent_version (consentimento LGPD gravado pela Edge Function public-booking);
+-- erase_patient_data (só admin; apaga dados pessoais e mantém a consulta como "Paciente removido");
+-- list_clinic_team / update_team_member (só admin; nunca deixa a clínica sem administrador);
+-- tabela waitlist (lista de espera) com RLS por clínica.
+-- Edge Function nova: team-add-member (cria conta com senha provisória e vincula à clínica).

@@ -12,7 +12,8 @@
     specialties: [],
     professionals: [],
     appointments: [],
-    patients: []
+    patients: [],
+    waitlist: []
   };
 
   // --- Referências de elementos do DOM ---
@@ -43,6 +44,9 @@
     panels: {
       agenda: document.getElementById("panel-agenda"),
       patients: document.getElementById("panel-patients"),
+      waitlist: document.getElementById("panel-waitlist"),
+      reports: document.getElementById("panel-reports"),
+      settings: document.getElementById("panel-settings"),
       appointments: document.getElementById("panel-appointments"),
       professionals: document.getElementById("panel-professionals"),
       specialties: document.getElementById("panel-specialties")
@@ -74,6 +78,33 @@
     patientFeedback: document.getElementById("patient-feedback"),
     patientCancel: document.getElementById("patient-cancel"),
     patientSubmit: document.getElementById("patient-submit"),
+    waitlistFilter: document.getElementById("waitlist-filter"),
+    waitlistForm: document.getElementById("waitlist-form"),
+    waitlistList: document.getElementById("waitlist-list"),
+    wlName: document.getElementById("wl-name"),
+    wlPatients: document.getElementById("wl-patients"),
+    wlPhone: document.getElementById("wl-phone"),
+    wlSpecialty: document.getElementById("wl-specialty"),
+    wlProfessional: document.getElementById("wl-professional"),
+    wlPeriod: document.getElementById("wl-period"),
+    wlNotes: document.getElementById("wl-notes"),
+    wlSubmit: document.getElementById("wl-submit"),
+    reportPeriod: document.getElementById("report-period"),
+    reportExport: document.getElementById("report-export"),
+    reportKpis: document.getElementById("report-kpis"),
+    reportProfessionals: document.getElementById("report-professionals"),
+    reportSpecialties: document.getElementById("report-specialties"),
+    bookingLink: document.getElementById("booking-link"),
+    copyLink: document.getElementById("copy-link"),
+    bookingQr: document.getElementById("booking-qr"),
+    downloadQr: document.getElementById("download-qr"),
+    teamCard: document.getElementById("team-card"),
+    teamList: document.getElementById("team-list"),
+    teamForm: document.getElementById("team-form"),
+    teamEmail: document.getElementById("team-email"),
+    teamRole: document.getElementById("team-role"),
+    teamSubmit: document.getElementById("team-submit"),
+    teamResult: document.getElementById("team-result"),
     editModal: document.getElementById("edit-modal"),
     editForm: document.getElementById("edit-form"),
     editTitle: document.getElementById("edit-modal-title"),
@@ -480,6 +511,8 @@
     el.statWeekCount.textContent = String(nextWeek.length);
     renderAgenda();
     renderPatients();
+    renderReports();
+    renderWaitlist();
   }
 
   async function loadSpecialties() {
@@ -516,6 +549,7 @@
     state.professionals = Array.isArray(data) ? data : [];
     renderProfessionals();
     populateAgendaProfessionals();
+    if (el.waitlistList) renderWaitlist();
   }
 
   async function loadAppointments() {
@@ -539,7 +573,7 @@
   async function loadAllClinicData() {
     // Carrega especialidades primeiro para mapear specialty_id -> nome
     await loadSpecialties();
-    await Promise.all([loadProfessionals(), loadAppointments(), loadPatients()]);
+    await Promise.all([loadProfessionals(), loadAppointments(), loadPatients(), loadWaitlist()]);
     renderAppointments(); // de novo, agora com os nomes dos profissionais carregados
     updateDashboardHeaderAndStats();
   }
@@ -1005,7 +1039,12 @@
         reschedule: "Consulta remarcada.",
         cancel: "Consulta cancelada. O horário ficou livre."
       };
-      showAdminFeedback(messages[mode], "success");
+      let message = messages[mode];
+      if (mode === "cancel") {
+        const waiting = (state.waitlist || []).filter((w) => w.status === "waiting" && (!w.specialty_id || w.specialty_id === appt.specialty_id)).length;
+        if (waiting) message += ` Há ${plural(waiting, "pessoa", "pessoas")} na lista de espera para esta especialidade.`;
+      }
+      showAdminFeedback(message, "success");
     } catch (err) {
       showError(err.message);
     } finally {
@@ -1165,6 +1204,8 @@
     showScreen("dashboard");
     applyRolePermissions();
     await loadAllClinicData();
+    renderShare();
+    loadTeam();
   }
 
   async function handleLoginSubmit(event) {
@@ -1228,6 +1269,7 @@
     el.tabButtons.forEach((btn) => {
       btn.addEventListener("click", () => {
         const targetTab = btn.dataset.tab;
+        btn.scrollIntoView({ block: "nearest", inline: "nearest" });
         el.tabButtons.forEach((b) => b.classList.toggle("active", b === btn));
 
         Object.entries(el.panels).forEach(([key, panel]) => {
@@ -1838,6 +1880,10 @@
       closeDrawer();
       openPatientModal(p);
     }));
+    actions.appendChild(actionButton("Exportar dados", "button-outline", () => exportPatientData(p)));
+    if (isAdmin()) {
+      actions.appendChild(actionButton("Excluir dados", "button-outline button-text-danger", () => erasePatientData(p)));
+    }
     body.appendChild(actions);
 
     const title = document.createElement("h4");
@@ -1926,6 +1972,494 @@
     }
   }
 
+  // --- LGPD: exportar e excluir dados do paciente ---
+
+  async function exportPatientData(p) {
+    try {
+      const appts = state.appointments.filter((a) => a.patient_id === p.id);
+      let events = [];
+      if (appts.length) {
+        const { data, error } = await state.supabase
+          .from("appointment_events")
+          .select("appointment_id, from_status, to_status, note, starts_at, created_at")
+          .in("appointment_id", appts.map((a) => a.id));
+        if (error) throw error;
+        events = data || [];
+      }
+      const payload = {
+        gerado_em: new Date().toISOString(),
+        clinica: state.clinic ? state.clinic.name : "",
+        paciente: {
+          nome: p.full_name, telefone: p.phone, email: p.email, nascimento: p.birth_date,
+          observacoes_administrativas: p.admin_notes, cadastrado_em: p.created_at
+        },
+        pedidos_e_consultas: appts.map((a) => ({
+          especialidade: getSpecialtyNameById(a.specialty_id),
+          dia_pedido: a.preferred_date, status: getStatusMeta(a.status).label,
+          inicio: a.starts_at, fim: a.ends_at,
+          profissional: a.professional_id ? getProfessionalNameById(a.professional_id) : null,
+          mensagem: a.message, motivo: a.status_reason, recebido_em: a.created_at,
+          historico: events.filter((e) => e.appointment_id === a.id)
+            .map((e) => ({ de: e.from_status, para: e.to_status, nota: e.note, quando: e.created_at }))
+        }))
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `dados-${normalizeText(p.full_name).replace(/[^a-z0-9]+/g, "-")}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(link.href), 2000);
+      showAdminFeedback("Arquivo com os dados do paciente baixado.", "success");
+    } catch (err) {
+      showAdminFeedback(translateSupabaseError(err, "Não foi possível exportar os dados."), "error");
+    }
+  }
+
+  async function erasePatientData(p) {
+    const ok = await confirmAction(
+      "Excluir dados do paciente",
+      `Os dados pessoais de ${p.full_name} serão apagados (nome, telefone, e-mail e mensagens). As consultas continuam na agenda como "Paciente removido". Esta ação não pode ser desfeita.`
+    );
+    if (!ok) return;
+    try {
+      const { error } = await state.supabase.rpc("erase_patient_data", { p_patient_id: p.id });
+      if (error) throw new Error(translateSupabaseError(error, "Não foi possível excluir os dados."));
+      closeDrawer();
+      await Promise.all([loadAppointments(), loadPatients(), loadWaitlist()]);
+      updateDashboardHeaderAndStats();
+      showAdminFeedback("Dados pessoais do paciente excluídos.", "success");
+    } catch (err) {
+      showAdminFeedback(err.message, "error");
+    }
+  }
+
+  // --- Lista de espera ---
+
+  const PERIOD_LABELS = { any: "Qualquer horário", morning: "Manhã", afternoon: "Tarde", evening: "Noite" };
+  const WAITLIST_LABELS = { waiting: "Aguardando", contacted: "Contatado", scheduled: "Agendado", removed: "Removido" };
+
+  async function loadWaitlist() {
+    const { clinicId } = await requireAuthorizedContext();
+    const { data, error } = await state.supabase
+      .from("waitlist")
+      .select("id, patient_id, patient_name, patient_phone, specialty_id, professional_id, preferred_period, notes, status, created_at")
+      .eq("clinic_id", clinicId)
+      .order("created_at", { ascending: true })
+      .limit(500);
+    if (error) throw new Error(translateSupabaseError(error, "Erro ao carregar a lista de espera."));
+    state.waitlist = Array.isArray(data) ? data : [];
+    renderWaitlist();
+  }
+
+  function fillSelect(select, items, emptyLabel) {
+    const current = select.value;
+    select.replaceChildren();
+    const first = document.createElement("option");
+    first.value = "";
+    first.textContent = emptyLabel;
+    select.appendChild(first);
+    items.forEach((it) => {
+      const opt = document.createElement("option");
+      opt.value = it.id;
+      opt.textContent = it.name;
+      select.appendChild(opt);
+    });
+    if ([...select.options].some((o) => o.value === current)) select.value = current;
+  }
+
+  function renderWaitlist() {
+    if (!el.waitlistList) return;
+    fillSelect(el.wlSpecialty, state.specialties, "Qualquer especialidade");
+    fillSelect(el.wlProfessional, state.professionals, "Sem preferência");
+    el.wlPatients.replaceChildren();
+    (state.patients || []).forEach((p) => {
+      const opt = document.createElement("option");
+      opt.value = p.full_name;
+      opt.label = p.phone;
+      el.wlPatients.appendChild(opt);
+    });
+
+    const filter = el.waitlistFilter.value;
+    const rows = state.waitlist.filter((w) =>
+      filter === "open" ? ["waiting", "contacted"].includes(w.status)
+        : filter === "waiting" ? w.status === "waiting"
+          : ["scheduled", "removed"].includes(w.status));
+    el.waitlistList.replaceChildren();
+    if (!rows.length) {
+      const empty = document.createElement("p");
+      empty.className = "empty-state";
+      empty.textContent = filter === "done" ? "Nada aqui ainda." : "Ninguém na lista de espera.";
+      el.waitlistList.appendChild(empty);
+      return;
+    }
+    rows.forEach((w) => {
+      const row = document.createElement("div");
+      row.className = "item-row waitlist-row";
+      const info = document.createElement("div");
+      info.className = "item-info";
+      const name = document.createElement("strong");
+      name.textContent = `${w.patient_name} · ${w.patient_phone}`;
+      const line = document.createElement("span");
+      const parts = [
+        w.specialty_id ? getSpecialtyNameById(w.specialty_id) : "Qualquer especialidade",
+        w.professional_id ? getProfessionalNameById(w.professional_id) : null,
+        PERIOD_LABELS[w.preferred_period] || "",
+        `desde ${formatDateBR(w.created_at)}`
+      ].filter(Boolean);
+      line.textContent = parts.join(" · ");
+      info.append(name, line);
+      if (w.notes) {
+        const notes = document.createElement("small");
+        notes.textContent = w.notes;
+        info.appendChild(notes);
+      }
+      const badge = document.createElement("span");
+      badge.className = `status-badge wl-${w.status}`;
+      badge.textContent = WAITLIST_LABELS[w.status];
+      info.appendChild(badge);
+
+      const btns = document.createElement("div");
+      btns.className = "row-actions";
+      const digits = String(w.patient_phone || "").replace(/\D/g, "");
+      if (digits) {
+        const wa = document.createElement("a");
+        wa.className = "button button-outline button-sm";
+        wa.href = `https://wa.me/${digits.length <= 11 ? "55" + digits : digits}`;
+        wa.target = "_blank";
+        wa.rel = "noopener noreferrer";
+        wa.textContent = "WhatsApp";
+        btns.appendChild(wa);
+      }
+      if (w.status === "waiting") btns.appendChild(actionButton("Marcar contatado", "button-outline", () => setWaitlistStatus(w, "contacted")));
+      if (["waiting", "contacted"].includes(w.status)) {
+        btns.appendChild(actionButton("Agendado", "button-primary", () => setWaitlistStatus(w, "scheduled")));
+        btns.appendChild(actionButton("Remover", "button-outline", () => setWaitlistStatus(w, "removed")));
+      }
+      row.append(info, btns);
+      el.waitlistList.appendChild(row);
+    });
+  }
+
+  async function setWaitlistStatus(w, status) {
+    try {
+      const { clinicId } = await requireAuthorizedContext();
+      const { data, error } = await state.supabase.from("waitlist")
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq("id", w.id).eq("clinic_id", clinicId).select("id");
+      if (error) throw new Error(translateSupabaseError(error, "Não foi possível atualizar a lista de espera."));
+      if (!data || !data.length) throw new Error("Você não tem permissão para alterar este item.");
+      await loadWaitlist();
+      showAdminFeedback(`Lista de espera: ${WAITLIST_LABELS[status].toLowerCase()}.`, "success");
+    } catch (err) {
+      showAdminFeedback(err.message, "error");
+    }
+  }
+
+  async function handleWaitlistSubmit(event) {
+    event.preventDefault();
+    const name = el.wlName.value.trim();
+    const phone = el.wlPhone.value.trim();
+    if (name.length < 2) return showAdminFeedback("Informe o nome do paciente.", "error");
+    if (phone.replace(/\D/g, "").length < 10) return showAdminFeedback("Informe o telefone com DDD.", "error");
+    const known = (state.patients || []).find((p) =>
+      p.phone.replace(/\D/g, "") === phone.replace(/\D/g, "") || normalizeText(p.full_name) === normalizeText(name));
+    el.wlSubmit.disabled = true;
+    try {
+      const { clinicId } = await requireAuthorizedContext();
+      const { error } = await state.supabase.from("waitlist").insert({
+        clinic_id: clinicId,
+        patient_id: known ? known.id : null,
+        patient_name: name,
+        patient_phone: phone,
+        specialty_id: el.wlSpecialty.value || null,
+        professional_id: el.wlProfessional.value || null,
+        preferred_period: el.wlPeriod.value,
+        notes: el.wlNotes.value.trim() || null
+      });
+      if (error) throw new Error(translateSupabaseError(error, "Não foi possível adicionar à lista de espera."));
+      el.waitlistForm.reset();
+      await loadWaitlist();
+      showAdminFeedback(`${name} entrou na lista de espera.`, "success");
+    } catch (err) {
+      showAdminFeedback(err.message, "error");
+    } finally {
+      el.wlSubmit.disabled = false;
+    }
+  }
+
+  function autofillWaitlistPhone() {
+    const p = (state.patients || []).find((x) => x.full_name === el.wlName.value);
+    if (p && !el.wlPhone.value) el.wlPhone.value = p.phone;
+  }
+
+  // --- Relatórios ---
+
+  function reportRange() {
+    const today = todayISO();
+    const [y, m] = today.split("-").map(Number);
+    const pad = (n) => String(n).padStart(2, "0");
+    const period = el.reportPeriod.value;
+    if (period === "this_month") return [`${y}-${pad(m)}-01`, today];
+    if (period === "last_month") {
+      const py = m === 1 ? y - 1 : y;
+      const pm = m === 1 ? 12 : m - 1;
+      const last = new Date(Date.UTC(py, pm, 0)).getUTCDate();
+      return [`${py}-${pad(pm)}-01`, `${py}-${pad(pm)}-${pad(last)}`];
+    }
+    if (period === "last_90") return [addDaysISO(today, -89), today];
+    return ["0000-01-01", "9999-12-31"];
+  }
+
+  function appointmentsInReport() {
+    const [from, to] = reportRange();
+    return state.appointments.filter((a) => {
+      const day = a.starts_at ? localDayOf(a.starts_at) : localDayOf(a.created_at);
+      return day >= from && day <= to;
+    });
+  }
+
+  function percent(part, total) {
+    return total ? `${Math.round((part / total) * 100)}%` : "—";
+  }
+
+  function renderReports() {
+    if (!el.reportKpis) return;
+    const list = appointmentsInReport();
+    const count = (st) => list.filter((a) => a.status === st).length;
+    const completed = count("completed");
+    const noShow = count("no_show");
+    const cancelled = count("cancelled");
+    const confirmed = count("confirmed");
+    const pending = count("pending");
+    const kpis = [
+      ["Pedidos e consultas", String(list.length)],
+      ["Concluídas", String(completed)],
+      ["Comparecimento", percent(completed, completed + noShow)],
+      ["Faltas", String(noShow)],
+      ["Cancelamentos", `${cancelled} (${percent(cancelled, list.length)})`],
+      ["Abertas agora", `${pending} pendentes · ${confirmed} confirmadas`]
+    ];
+    el.reportKpis.replaceChildren();
+    kpis.forEach(([label, value]) => {
+      const card = document.createElement("div");
+      card.className = "report-kpi";
+      const l = document.createElement("span");
+      l.textContent = label;
+      const v = document.createElement("strong");
+      v.textContent = value;
+      card.append(l, v);
+      el.reportKpis.appendChild(card);
+    });
+
+    const fillTable = (tbody, rows, emptyText, cols) => {
+      tbody.replaceChildren();
+      if (!rows.length) {
+        const tr = document.createElement("tr");
+        const td = document.createElement("td");
+        td.colSpan = cols.length;
+        td.className = "empty-state";
+        td.textContent = emptyText;
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+        return;
+      }
+      rows.forEach((r) => {
+        const tr = document.createElement("tr");
+        r.forEach((value, i) => {
+          const td = document.createElement("td");
+          td.textContent = value;
+          td.setAttribute("data-label", cols[i]);
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+    };
+
+    const proRows = state.professionals.map((p) => {
+      const mine = list.filter((a) => a.professional_id === p.id);
+      const done = mine.filter((a) => a.status === "completed").length;
+      const miss = mine.filter((a) => a.status === "no_show").length;
+      return [p.name, String(mine.length), String(done), String(miss), percent(done, done + miss)];
+    }).filter((r) => r[1] !== "0");
+    fillTable(el.reportProfessionals, proRows, "Nenhuma consulta com profissional neste período.",
+      ["Profissional", "Consultas", "Concluídas", "Faltas", "Comparecimento"]);
+
+    const specRows = state.specialties.map((sp) => {
+      const mine = list.filter((a) => a.specialty_id === sp.id);
+      return [sp.name, String(mine.length), String(mine.filter((a) => a.status === "cancelled").length)];
+    }).filter((r) => r[1] !== "0");
+    fillTable(el.reportSpecialties, specRows, "Nenhum pedido neste período.", ["Especialidade", "Pedidos", "Cancelados"]);
+  }
+
+  function exportReportCsv() {
+    const list = appointmentsInReport();
+    const esc = (v) => {
+      const text = String(v == null ? "" : v);
+      return /[";\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    };
+    const header = ["Paciente", "Telefone", "Especialidade", "Dia pedido", "Data e hora", "Profissional", "Status", "Motivo", "Recebido em"];
+    const lines = list.map((a) => [
+      a.patient_name, a.patient_phone, getSpecialtyNameById(a.specialty_id),
+      a.preferred_date ? formatDateBR(a.preferred_date) : "",
+      a.starts_at ? formatDateTimeBR(a.starts_at) : "",
+      a.professional_id ? getProfessionalNameById(a.professional_id) : "",
+      getStatusMeta(a.status).label, a.status_reason || "", formatDateTimeBR(a.created_at)
+    ].map(esc).join(";"));
+    const csv = "﻿" + [header.join(";"), ...lines].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `relatorio-agendamentos-${todayISO()}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(link.href), 2000);
+  }
+
+  // --- Clínica e equipe: link de agendamento, QR Code e equipe ---
+
+  function bookingUrl() {
+    const base = window.location.href.replace(/admin\.html.*$/, "");
+    return `${base}#agendamento`;
+  }
+
+  function renderShare() {
+    if (!el.bookingLink) return;
+    const link = bookingUrl();
+    el.bookingLink.value = link;
+    if (typeof window.qrcode !== "function") return;
+    const qr = window.qrcode(0, "M");
+    qr.addData(link);
+    qr.make();
+    const n = qr.getModuleCount();
+    const canvas = el.bookingQr;
+    const size = 220;
+    const margin = 4;
+    const cell = Math.floor(size / (n + margin * 2));
+    const offset = Math.floor((size - cell * n) / 2);
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, size, size);
+    ctx.fillStyle = "#102b46";
+    for (let r = 0; r < n; r += 1) {
+      for (let c = 0; c < n; c += 1) {
+        if (qr.isDark(r, c)) ctx.fillRect(offset + c * cell, offset + r * cell, cell, cell);
+      }
+    }
+  }
+
+  async function copyBookingLink() {
+    try {
+      await navigator.clipboard.writeText(el.bookingLink.value);
+      showAdminFeedback("Link copiado.", "success");
+    } catch (err) {
+      el.bookingLink.select();
+      showAdminFeedback("Selecione o link e copie com Ctrl+C.", "error");
+    }
+  }
+
+  function downloadQrCode() {
+    const link = document.createElement("a");
+    link.href = el.bookingQr.toDataURL("image/png");
+    link.download = "qrcode-agendamento.png";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
+
+  async function loadTeam() {
+    if (!el.teamCard) return;
+    const admin = isAdmin();
+    el.teamForm.hidden = !admin;
+    el.teamList.replaceChildren();
+    if (!admin) {
+      const note = document.createElement("p");
+      note.className = "admin-only-note";
+      note.textContent = "Somente administradores veem e gerenciam a equipe.";
+      el.teamList.appendChild(note);
+      return;
+    }
+    const { data, error } = await state.supabase.rpc("list_clinic_team", { p_clinic_id: state.clinic.id });
+    if (error) {
+      const p = document.createElement("p");
+      p.className = "empty-state";
+      p.textContent = "Não foi possível carregar a equipe.";
+      el.teamList.appendChild(p);
+      return;
+    }
+    (data || []).forEach((m) => {
+      const row = document.createElement("div");
+      row.className = "item-row";
+      const info = document.createElement("div");
+      info.className = "item-info";
+      const email = document.createElement("strong");
+      email.textContent = m.email + (state.user && m.user_id === state.user.id ? " (você)" : "");
+      const meta = document.createElement("span");
+      meta.textContent = m.last_sign_in_at ? `Último acesso: ${formatDateTimeBR(m.last_sign_in_at)}` : "Ainda não entrou";
+      info.append(email, meta);
+      const btns = document.createElement("div");
+      btns.className = "row-actions";
+      const role = document.createElement("select");
+      role.className = "status-select";
+      role.setAttribute("aria-label", `Função de ${m.email}`);
+      [["staff", "Equipe"], ["admin", "Administrador"]].forEach(([v, l]) => {
+        const o = document.createElement("option");
+        o.value = v;
+        o.textContent = l;
+        if (m.role === v) o.selected = true;
+        role.appendChild(o);
+      });
+      role.addEventListener("change", () => changeTeamMember(m, role.value, false));
+      btns.append(role, actionButton("Remover", "button-outline", () => changeTeamMember(m, m.role, true)));
+      row.append(info, btns);
+      el.teamList.appendChild(row);
+    });
+  }
+
+  async function changeTeamMember(m, role, remove) {
+    if (remove) {
+      const ok = await confirmAction("Remover da equipe", `${m.email} perderá o acesso ao painel desta clínica.`);
+      if (!ok) return;
+    }
+    const { error } = await state.supabase.rpc("update_team_member", { p_member_id: m.member_id, p_role: role, p_remove: remove });
+    if (error) showAdminFeedback(translateSupabaseError(error, "Não foi possível alterar a equipe."), "error");
+    else showAdminFeedback(remove ? "Pessoa removida da equipe." : "Função atualizada.", "success");
+    await loadTeam();
+  }
+
+  async function handleTeamSubmit(event) {
+    event.preventDefault();
+    const email = el.teamEmail.value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return showAdminFeedback("Informe um e-mail válido.", "error");
+    el.teamSubmit.disabled = true;
+    el.teamResult.hidden = true;
+    try {
+      const { data, error } = await state.supabase.functions.invoke("team-add-member", {
+        body: { clinic_id: state.clinic.id, email, role: el.teamRole.value }
+      });
+      if (error) {
+        let message = "Não foi possível adicionar a pessoa agora.";
+        try {
+          const body = await error.context.json();
+          if (body && body.error) message = body.error;
+        } catch (e) { /* mantém a mensagem padrão */ }
+        throw new Error(message);
+      }
+      el.teamForm.reset();
+      el.teamResult.textContent = data.temporary_password
+        ? `Conta criada. Envie para ${data.email}: endereço ${window.location.href.split("?")[0]} e senha provisória ${data.temporary_password} — esta senha aparece só agora. Peça para a pessoa trocar em "Esqueci minha senha" depois.`
+        : `${data.email} já tinha conta e agora faz parte da equipe.`;
+      el.teamResult.hidden = false;
+      await loadTeam();
+    } catch (err) {
+      showAdminFeedback(err.message, "error");
+    } finally {
+      el.teamSubmit.disabled = false;
+    }
+  }
+
   // --- 9. Inicialização da Página ---
 
   async function bootstrap() {
@@ -1975,6 +2509,14 @@
     });
     el.editForm.addEventListener("submit", handleEditSubmit);
     el.patientSearch.addEventListener("input", renderPatients);
+    el.waitlistFilter.addEventListener("change", renderWaitlist);
+    el.waitlistForm.addEventListener("submit", handleWaitlistSubmit);
+    el.wlName.addEventListener("change", autofillWaitlistPhone);
+    el.reportPeriod.addEventListener("change", renderReports);
+    el.reportExport.addEventListener("click", exportReportCsv);
+    el.copyLink.addEventListener("click", copyBookingLink);
+    el.downloadQr.addEventListener("click", downloadQrCode);
+    el.teamForm.addEventListener("submit", handleTeamSubmit);
     el.patientForm.addEventListener("submit", handlePatientSubmit);
     el.patientCancel.addEventListener("click", closePatientModal);
     el.patientModal.addEventListener("click", (event) => {

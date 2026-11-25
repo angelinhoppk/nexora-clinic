@@ -942,3 +942,36 @@ a.detail-value { color: var(--navy); font-weight: 600; }
 .drawer-patient-link { display: inline-block; margin: -6px 0 18px; font-size: 13px; text-decoration-color: currentColor; }
 .patient-appointments .link-button { font-weight: 500; font-size: 12px; }
 @media (max-width: 720px) { #patient-search { min-width: 0; width: 100%; } }
+
+/* --- Etapa 5: lista de espera, relatórios, clínica e equipe --- */
+.button-text-danger { color: var(--danger); }
+.waitlist-row { align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+.waitlist-row .item-info small { display: block; margin-top: 4px; }
+.waitlist-row .status-badge { margin-top: 8px; align-self: flex-start; }
+.wl-waiting { background: var(--warning-soft); color: var(--warning); }
+.wl-contacted { background: #e8f0f7; color: #1f4e79; }
+.wl-scheduled { background: var(--success-soft); color: var(--success); }
+.wl-removed { background: #eceff1; color: #4a5560; }
+a.button { text-decoration: none; }
+.report-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 28px; }
+.report-kpi { border: 1px solid var(--line); padding: 16px 18px; }
+.report-kpi span { display: block; font-size: 11px; color: #56636c; }
+.report-kpi strong { display: block; margin-top: 6px; font: 600 22px "Manrope", sans-serif; color: var(--navy); }
+.report-tables { display: grid; grid-template-columns: 1.4fr 1fr; gap: 28px; }
+.report-title { font: 600 15px "Manrope", sans-serif; color: var(--navy); margin: 0 0 10px; }
+.settings-grid { display: grid; grid-template-columns: 1fr 1.3fr; gap: 28px; align-items: start; }
+.share-row { display: flex; gap: 8px; }
+.share-row input { flex: 1; min-width: 0; height: 44px; padding: 0 12px; border: 1px solid var(--line); font: 13px "DM Sans", sans-serif; color: var(--ink); background: #fafcfb; }
+.qr-box { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; margin-top: 18px; }
+.qr-box canvas { border: 1px solid var(--line); width: 180px; height: 180px; }
+.team-form { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
+.team-form h4 { margin: 0 0 8px; font: 600 14px "Manrope", sans-serif; color: var(--navy); }
+#team-result { margin-top: 14px; word-break: break-word; }
+@media (max-width: 900px) {
+  .report-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .report-tables, .settings-grid { grid-template-columns: 1fr; }
+}
+.settings-grid > *, .report-tables > * { min-width: 0; }
+.tab-btn.active { scroll-margin-inline: 24px; }
+.waitlist-row .status-badge { width: fit-content; }
+.report-kpi strong { font-size: 20px; line-height: 1.3; }

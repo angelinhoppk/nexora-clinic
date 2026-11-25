@@ -173,11 +173,20 @@
         <button type="button" class="tab-btn" data-tab="patients">
           Pacientes
         </button>
+        <button type="button" class="tab-btn" data-tab="waitlist">
+          Lista de espera
+        </button>
+        <button type="button" class="tab-btn" data-tab="reports">
+          Relatórios
+        </button>
         <button type="button" class="tab-btn" data-tab="professionals">
           Profissionais
         </button>
         <button type="button" class="tab-btn" data-tab="specialties">
           Especialidades
+        </button>
+        <button type="button" class="tab-btn" data-tab="settings">
+          Clínica e equipe
         </button>
       </nav>
 
@@ -230,6 +239,92 @@
             </thead>
             <tbody id="patients-list"></tbody>
           </table>
+        </div>
+      </section>
+
+      <!-- MÓDULO: LISTA DE ESPERA -->
+      <section class="module-panel" id="panel-waitlist" hidden>
+        <div class="panel-header">
+          <div>
+            <h2>Lista de espera</h2>
+            <p>Quem quer ser avisado se abrir um horário. Nada é reservado sem falar com o paciente.</p>
+          </div>
+          <div class="panel-actions">
+            <select id="waitlist-filter" aria-label="Filtrar lista de espera">
+              <option value="open">Aguardando e contatados</option>
+              <option value="waiting">Só aguardando</option>
+              <option value="done">Agendados e removidos</option>
+            </select>
+          </div>
+        </div>
+        <div class="split-layout">
+          <form class="card-form" id="waitlist-form" novalidate>
+            <h3>Adicionar à lista</h3>
+            <div class="field-group">
+              <label for="wl-name">Nome do paciente *</label>
+              <input id="wl-name" type="text" maxlength="120" list="wl-patients" autocomplete="off" required>
+              <datalist id="wl-patients"></datalist>
+            </div>
+            <div class="field-group">
+              <label for="wl-phone">Telefone *</label>
+              <input id="wl-phone" type="tel" maxlength="30" placeholder="(11) 99999-9999" required>
+            </div>
+            <div class="field-group">
+              <label for="wl-specialty">Especialidade</label>
+              <select id="wl-specialty"></select>
+            </div>
+            <div class="field-group">
+              <label for="wl-professional">Profissional de preferência</label>
+              <select id="wl-professional"></select>
+            </div>
+            <div class="field-group">
+              <label for="wl-period">Melhor período</label>
+              <select id="wl-period">
+                <option value="any">Qualquer horário</option>
+                <option value="morning">Manhã</option>
+                <option value="afternoon">Tarde</option>
+                <option value="evening">Noite</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label for="wl-notes">Observações</label>
+              <textarea id="wl-notes" rows="2" maxlength="500" placeholder="Ex.: só pode às terças"></textarea>
+            </div>
+            <button class="button button-primary button-full" id="wl-submit" type="submit">Adicionar à lista</button>
+          </form>
+          <div class="list-card">
+            <div id="waitlist-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- MÓDULO: RELATÓRIOS -->
+      <section class="module-panel" id="panel-reports" hidden>
+        <div class="panel-header">
+          <div>
+            <h2>Relatórios</h2>
+            <p>Números calculados a partir dos pedidos e consultas desta clínica.</p>
+          </div>
+          <div class="panel-actions">
+            <select id="report-period" aria-label="Período do relatório">
+              <option value="this_month">Este mês</option>
+              <option value="last_month">Mês passado</option>
+              <option value="last_90">Últimos 90 dias</option>
+              <option value="all">Todo o período</option>
+            </select>
+            <button type="button" class="button button-outline" id="report-export">Exportar planilha (CSV)</button>
+          </div>
+        </div>
+        <div class="report-kpis" id="report-kpis"></div>
+        <div class="report-tables">
+          <div>
+            <h3 class="report-title">Por profissional</h3>
+            <div class="table-wrapper"><table class="data-table"><thead><tr><th>Profissional</th><th>Consultas</th><th>Concluídas</th><th>Faltas</th><th>Comparecimento</th></tr></thead><tbody id="report-professionals"></tbody></table></div>
+          </div>
+          <div>
+            <h3 class="report-title">Por especialidade</h3>
+            <div class="table-wrapper"><table class="data-table"><thead><tr><th>Especialidade</th><th>Pedidos</th><th>Cancelados</th></tr></thead><tbody id="report-specialties"></tbody></table></div>
+          </div>
         </div>
       </section>
 
@@ -363,6 +458,50 @@
             <div class="items-list" id="specialties-list">
               <p class="empty-state">Carregando especialidades...</p>
             </div>
+          </div>
+        </div>
+      </section>
+      <!-- MÓDULO: CLÍNICA E EQUIPE -->
+      <section class="module-panel" id="panel-settings" hidden>
+        <div class="panel-header">
+          <div>
+            <h2>Clínica e equipe</h2>
+            <p>Link de agendamento para divulgar e as pessoas com acesso a este painel.</p>
+          </div>
+        </div>
+        <div class="settings-grid">
+          <div class="card-form">
+            <h3>Link de agendamento</h3>
+            <p class="form-hint">Divulgue no Instagram, no WhatsApp ou imprima o QR Code na recepção.</p>
+            <div class="share-row">
+              <input id="booking-link" type="text" readonly aria-label="Link de agendamento">
+              <button type="button" class="button button-outline" id="copy-link">Copiar</button>
+            </div>
+            <div class="qr-box">
+              <canvas id="booking-qr" width="220" height="220" role="img" aria-label="QR Code do link de agendamento"></canvas>
+              <button type="button" class="button button-outline" id="download-qr">Baixar QR Code</button>
+            </div>
+          </div>
+          <div class="card-form" id="team-card">
+            <h3>Equipe</h3>
+            <p class="form-hint" id="team-hint">Administradores gerenciam tudo. Equipe vê a agenda, confirma e cancela consultas e edita pacientes.</p>
+            <div id="team-list"></div>
+            <form id="team-form" class="team-form" novalidate>
+              <h4>Adicionar pessoa</h4>
+              <div class="field-group">
+                <label for="team-email">E-mail *</label>
+                <input id="team-email" type="email" maxlength="160" required>
+              </div>
+              <div class="field-group">
+                <label for="team-role">Função</label>
+                <select id="team-role">
+                  <option value="staff">Equipe</option>
+                  <option value="admin">Administrador</option>
+                </select>
+              </div>
+              <button class="button button-primary" id="team-submit" type="submit">Adicionar à equipe</button>
+              <div class="alert-box alert-success" id="team-result" role="status" hidden></div>
+            </form>
           </div>
         </div>
       </section>
@@ -505,6 +644,8 @@
 
   <!-- Biblioteca oficial Supabase JS v2 -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Gerador de QR Code (qrcode-generator, licença MIT) -->
+  <script src="vendor/qrcode.js"></script>
   <!-- Configuração centralizada -->
   <script src="config.js"></script>
   <!-- Lógica administrativa -->
