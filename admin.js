@@ -34,17 +34,45 @@
     statClinicName: document.getElementById("stat-clinic-name"),
     statUserRole: document.getElementById("stat-user-role"),
     statPendingCount: document.getElementById("stat-pending-count"),
-    statProfessionalsCount: document.getElementById("stat-professionals-count"),
-    statSpecialtiesCount: document.getElementById("stat-specialties-count"),
+    statTodayCount: document.getElementById("stat-today-count"),
+    statTodayHint: document.getElementById("stat-today-hint"),
+    statWeekCount: document.getElementById("stat-week-count"),
 
     tabButtons: document.querySelectorAll(".tab-btn"),
     panels: {
+      agenda: document.getElementById("panel-agenda"),
       appointments: document.getElementById("panel-appointments"),
       professionals: document.getElementById("panel-professionals"),
       specialties: document.getElementById("panel-specialties")
     },
 
     appointmentFilter: document.getElementById("appointment-status-filter"),
+    appointmentSearch: document.getElementById("appointment-search"),
+    appointmentPeriod: document.getElementById("appointment-period-filter"),
+    agendaTitle: document.getElementById("agenda-title"),
+    agendaSubtitle: document.getElementById("agenda-subtitle"),
+    agendaBody: document.getElementById("agenda-body"),
+    agendaPrev: document.getElementById("agenda-prev"),
+    agendaNext: document.getElementById("agenda-next"),
+    agendaToday: document.getElementById("agenda-today"),
+    agendaProfessional: document.getElementById("agenda-professional"),
+    agendaViewBtns: document.querySelectorAll("[data-agenda-view]"),
+    drawer: document.getElementById("appt-drawer"),
+    drawerTitle: document.getElementById("drawer-title"),
+    drawerBody: document.getElementById("drawer-body"),
+    drawerClose: document.getElementById("drawer-close"),
+    editModal: document.getElementById("edit-modal"),
+    editForm: document.getElementById("edit-form"),
+    editTitle: document.getElementById("edit-modal-title"),
+    editName: document.getElementById("edit-name"),
+    editNameLabel: document.getElementById("edit-name-label"),
+    editSpecialtyGroup: document.getElementById("edit-specialty-group"),
+    editSpecialty: document.getElementById("edit-specialty"),
+    editDescriptionGroup: document.getElementById("edit-description-group"),
+    editDescription: document.getElementById("edit-description"),
+    editFeedback: document.getElementById("edit-feedback"),
+    editCancel: document.getElementById("edit-cancel"),
+    editSubmit: document.getElementById("edit-submit"),
     refreshAppointmentsBtn: document.getElementById("refresh-appointments-btn"),
     appointmentsList: document.getElementById("appointments-list"),
 
@@ -419,8 +447,24 @@
     }).length;
 
     el.statPendingCount.textContent = String(pendingCount);
-    el.statProfessionalsCount.textContent = String(state.professionals.length);
-    el.statSpecialtiesCount.textContent = String(state.specialties.length);
+    const today = todayISO();
+    const weekEnd = addDaysISO(today, 6);
+    const active = (a) => a.starts_at && ["confirmed", "completed", "no_show"].includes(a.status);
+    const todays = state.appointments.filter((a) => active(a) && localDayOf(a.starts_at) === today);
+    const nextWeek = state.appointments.filter((a) => {
+      if (!a.starts_at || a.status !== "confirmed") return false;
+      const day = localDayOf(a.starts_at);
+      return day >= today && day <= weekEnd;
+    });
+    el.statTodayCount.textContent = String(todays.length);
+    const upcoming = todays
+      .filter((a) => a.status === "confirmed" && new Date(a.starts_at).getTime() > Date.now())
+      .sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at))[0];
+    el.statTodayHint.textContent = upcoming
+      ? `Próxima às ${timeOf(upcoming.starts_at)} · ${upcoming.patient_name || "Paciente"}`
+      : todays.length ? "Nenhuma outra consulta hoje" : "Nenhuma consulta marcada";
+    el.statWeekCount.textContent = String(nextWeek.length);
+    renderAgenda();
   }
 
   async function loadSpecialties() {
@@ -456,6 +500,7 @@
 
     state.professionals = Array.isArray(data) ? data : [];
     renderProfessionals();
+    populateAgendaProfessionals();
   }
 
   async function loadAppointments() {
@@ -510,9 +555,25 @@
 
   function renderAppointments() {
     const filterValue = el.appointmentFilter.value;
+    const term = normalizeText(el.appointmentSearch.value);
+    const digits = el.appointmentSearch.value.replace(/\D/g, "");
+    const period = el.appointmentPeriod.value;
+    const today = todayISO();
     const filtered = state.appointments.filter((item) => {
-      if (filterValue === "all") return true;
-      return String(item.status || "").toLowerCase() === filterValue;
+      if (filterValue !== "all" && String(item.status || "").toLowerCase() !== filterValue) return false;
+      if (term) {
+        const byName = normalizeText(item.patient_name).includes(term);
+        const byPhone = digits.length >= 3 && String(item.patient_phone || "").replace(/\D/g, "").includes(digits);
+        if (!byName && !byPhone) return false;
+      }
+      if (period !== "all") {
+        const day = item.starts_at ? localDayOf(item.starts_at) : item.preferred_date;
+        if (!day) return false;
+        if (period === "today" && day !== today) return false;
+        if (period === "next7" && (day < today || day > addDaysISO(today, 6))) return false;
+        if (period === "past" && day >= today) return false;
+      }
+      return true;
     });
 
     el.appointmentsList.replaceChildren();
@@ -523,9 +584,9 @@
       td.colSpan = 6;
       td.className = "empty-state";
       td.textContent =
-        filterValue === "all"
+        filterValue === "all" && !term && period === "all"
           ? "Nenhuma solicitação de agendamento encontrada para esta clínica."
-          : "Nenhuma solicitação encontrada para o filtro selecionado.";
+          : "Nada encontrado com esses filtros. Tente outra busca ou período.";
       tr.appendChild(td);
       el.appointmentsList.appendChild(tr);
       return;
@@ -536,8 +597,11 @@
 
       // 1. Paciente (+ observação/mensagem se houver)
       const tdPatient = document.createElement("td");
-      const strongName = document.createElement("strong");
+      const strongName = document.createElement("button");
+      strongName.type = "button";
+      strongName.className = "link-button";
       strongName.textContent = appt.patient_name || "Paciente sem nome";
+      strongName.addEventListener("click", () => openDrawer(appt.id));
       tdPatient.appendChild(strongName);
 
       if (appt.patient_email) {
@@ -594,6 +658,8 @@
       // 6. Ações permitidas para o status atual
       const tdAction = document.createElement("td");
       tdAction.appendChild(buildAppointmentActions(appt));
+      [[tdPatient, "Paciente"], [tdPhone, "Telefone"], [tdSpec, "Especialidade"], [tdDate, "Consulta"], [tdBadge, "Status"], [tdAction, "Ações"]]
+        .forEach(([td, label]) => td.setAttribute("data-label", label));
       tr.append(tdPatient, tdPhone, tdSpec, tdDate, tdBadge, tdAction);
       el.appointmentsList.appendChild(tr);
     });
@@ -635,7 +701,16 @@
         deleteBtn.className = "button button-outline button-sm";
         deleteBtn.textContent = "Excluir";
         deleteBtn.addEventListener("click", () => handleDeleteProfessional(pro));
-        row.appendChild(deleteBtn);
+        const editBtn = document.createElement("button");
+        editBtn.type = "button";
+        editBtn.className = "button button-outline button-sm";
+        editBtn.textContent = "Editar";
+        editBtn.setAttribute("aria-label", `Editar ${pro.name}`);
+        editBtn.addEventListener("click", () => openEditModal("pro", pro));
+        const btns = document.createElement("div");
+        btns.className = "row-actions";
+        btns.append(editBtn, deleteBtn);
+        row.appendChild(btns);
       }
       el.professionalsList.appendChild(row);
     });
@@ -677,7 +752,16 @@
         deleteBtn.className = "button button-outline button-sm";
         deleteBtn.textContent = "Excluir";
         deleteBtn.addEventListener("click", () => handleDeleteSpecialty(spec));
-        row.appendChild(deleteBtn);
+        const editBtn = document.createElement("button");
+        editBtn.type = "button";
+        editBtn.className = "button button-outline button-sm";
+        editBtn.textContent = "Editar";
+        editBtn.setAttribute("aria-label", `Editar ${spec.name}`);
+        editBtn.addEventListener("click", () => openEditModal("spec", spec));
+        const btns = document.createElement("div");
+        btns.className = "row-actions";
+        btns.append(editBtn, deleteBtn);
+        row.appendChild(btns);
       }
       el.specialtiesList.appendChild(row);
     });
@@ -1231,6 +1315,384 @@
     });
   }
 
+  // --- Agenda (dia e semana), busca, detalhes e edição ---
+
+  const agendaState = { view: "day", anchor: null, professional: "all" };
+
+  function normalizeText(value) {
+    return String(value || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+  }
+
+  function todayISO() {
+    return new Date().toLocaleDateString("en-CA", { timeZone: CLINIC_TIME_ZONE });
+  }
+
+  function addDaysISO(iso, days) {
+    const d = new Date(`${iso}T12:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + days);
+    return d.toISOString().slice(0, 10);
+  }
+
+  function localDayOf(isoDateTime) {
+    return new Date(isoDateTime).toLocaleDateString("en-CA", { timeZone: CLINIC_TIME_ZONE });
+  }
+
+  function timeOf(isoDateTime) {
+    return new Date(isoDateTime).toLocaleTimeString("pt-BR", { timeZone: CLINIC_TIME_ZONE, hour: "2-digit", minute: "2-digit" });
+  }
+
+  function dayLabel(iso, opts) {
+    return new Date(`${iso}T12:00:00Z`).toLocaleDateString("pt-BR", { timeZone: "UTC", ...opts });
+  }
+
+  function weekStart(iso) {
+    const dow = new Date(`${iso}T12:00:00Z`).getUTCDay(); // 0 = domingo
+    return addDaysISO(iso, dow === 0 ? -6 : 1 - dow); // semana começa na segunda
+  }
+
+  function populateAgendaProfessionals() {
+    const current = el.agendaProfessional.value || "all";
+    el.agendaProfessional.replaceChildren();
+    const all = document.createElement("option");
+    all.value = "all";
+    all.textContent = "Todos os profissionais";
+    el.agendaProfessional.appendChild(all);
+    state.professionals.forEach((p) => {
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = p.name;
+      el.agendaProfessional.appendChild(opt);
+    });
+    el.agendaProfessional.value = [...el.agendaProfessional.options].some((o) => o.value === current) ? current : "all";
+    agendaState.professional = el.agendaProfessional.value;
+  }
+
+  function agendaItemsForDay(day) {
+    return state.appointments
+      .filter((a) => a.starts_at && ["confirmed", "completed", "no_show"].includes(a.status))
+      .filter((a) => agendaState.professional === "all" || a.professional_id === agendaState.professional)
+      .filter((a) => localDayOf(a.starts_at) === day)
+      .sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
+  }
+
+  function buildAgendaCard(appt, compact) {
+    const card = document.createElement("button");
+    card.type = "button";
+    const past = appt.status === "confirmed" && new Date(appt.ends_at).getTime() < Date.now();
+    card.className = `agenda-card agenda-${appt.status}${past ? " agenda-overdue" : ""}`;
+    card.addEventListener("click", () => openDrawer(appt.id));
+
+    const time = document.createElement("span");
+    time.className = "agenda-time";
+    time.textContent = `${timeOf(appt.starts_at)}–${timeOf(appt.ends_at)}`;
+    const name = document.createElement("strong");
+    name.textContent = appt.patient_name || "Paciente";
+    const meta = document.createElement("span");
+    meta.className = "agenda-meta";
+    const statusText = past ? "Aguardando conclusão" : getStatusMeta(appt.status).label;
+    meta.textContent = compact
+      ? getProfessionalNameById(appt.professional_id)
+      : `${getProfessionalNameById(appt.professional_id)} · ${getSpecialtyNameById(appt.specialty_id)} · ${statusText}`;
+    card.append(time, name, meta);
+    card.setAttribute("aria-label", `${time.textContent}, ${name.textContent}, ${meta.textContent}`);
+    return card;
+  }
+
+  function renderAgenda() {
+    if (!el.agendaBody) return;
+    if (!agendaState.anchor) agendaState.anchor = todayISO();
+    const today = todayISO();
+    el.agendaBody.replaceChildren();
+
+    if (agendaState.view === "day") {
+      const day = agendaState.anchor;
+      el.agendaTitle.textContent = day === today ? "Hoje" : dayLabel(day, { weekday: "long", day: "numeric", month: "long" });
+      el.agendaSubtitle.textContent = day === today
+        ? dayLabel(day, { weekday: "long", day: "numeric", month: "long" })
+        : "Consultas do dia, em horário de Brasília.";
+      const items = agendaItemsForDay(day);
+      const list = document.createElement("div");
+      list.className = "agenda-day";
+      if (!items.length) {
+        const empty = document.createElement("p");
+        empty.className = "empty-state";
+        empty.textContent = "Nenhuma consulta marcada para este dia.";
+        list.appendChild(empty);
+      }
+      items.forEach((a) => list.appendChild(buildAgendaCard(a, false)));
+      el.agendaBody.appendChild(list);
+
+      const requests = state.appointments.filter((a) => a.status === "pending" && a.preferred_date === day);
+      if (requests.length) {
+        const box = document.createElement("div");
+        box.className = "agenda-requests";
+        const title = document.createElement("p");
+        title.textContent = requests.length === 1
+          ? "1 pedido para este dia ainda sem horário:"
+          : `${requests.length} pedidos para este dia ainda sem horário:`;
+        box.appendChild(title);
+        requests.forEach((a) => {
+          const row = document.createElement("div");
+          row.className = "agenda-request-row";
+          const nm = document.createElement("button");
+          nm.type = "button";
+          nm.className = "link-button";
+          nm.textContent = `${a.patient_name || "Paciente"} · ${getSpecialtyNameById(a.specialty_id)}`;
+          nm.addEventListener("click", () => openDrawer(a.id));
+          row.append(nm, actionButton("Confirmar", "button-primary", () => openAppointmentModal(a, "confirm")));
+          box.appendChild(row);
+        });
+        el.agendaBody.appendChild(box);
+      }
+      return;
+    }
+
+    const start = weekStart(agendaState.anchor);
+    const end = addDaysISO(start, 6);
+    el.agendaTitle.textContent = `Semana de ${dayLabel(start, { day: "numeric", month: "short" })} a ${dayLabel(end, { day: "numeric", month: "short" })}`;
+    el.agendaSubtitle.textContent = "Toque em uma consulta para ver os detalhes.";
+    const grid = document.createElement("div");
+    grid.className = "agenda-week";
+    for (let i = 0; i < 7; i += 1) {
+      const day = addDaysISO(start, i);
+      const col = document.createElement("div");
+      col.className = `agenda-col${day === today ? " is-today" : ""}`;
+      const head = document.createElement("button");
+      head.type = "button";
+      head.className = "agenda-col-head";
+      head.textContent = dayLabel(day, { weekday: "short", day: "2-digit", month: "2-digit" });
+      head.setAttribute("aria-label", `Ver o dia ${dayLabel(day, { weekday: "long", day: "numeric", month: "long" })}`);
+      head.addEventListener("click", () => setAgendaView("day", day));
+      col.appendChild(head);
+      const items = agendaItemsForDay(day);
+      if (!items.length) {
+        const none = document.createElement("span");
+        none.className = "agenda-none";
+        none.textContent = "Livre";
+        col.appendChild(none);
+      }
+      items.forEach((a) => col.appendChild(buildAgendaCard(a, true)));
+      grid.appendChild(col);
+    }
+    el.agendaBody.appendChild(grid);
+  }
+
+  function setAgendaView(view, anchor) {
+    agendaState.view = view;
+    if (anchor) agendaState.anchor = anchor;
+    el.agendaViewBtns.forEach((b) => {
+      const on = b.dataset.agendaView === view;
+      b.classList.toggle("active", on);
+      b.setAttribute("aria-pressed", String(on));
+    });
+    renderAgenda();
+  }
+
+  function shiftAgenda(direction) {
+    const step = agendaState.view === "week" ? 7 : 1;
+    agendaState.anchor = addDaysISO(agendaState.anchor || todayISO(), step * direction);
+    renderAgenda();
+  }
+
+  // Painel lateral com os dados do paciente, a consulta e o histórico
+  let drawerReturnFocus = null;
+
+  function detailRow(label, value, href) {
+    const row = document.createElement("div");
+    row.className = "detail-row";
+    const dt = document.createElement("span");
+    dt.className = "detail-label";
+    dt.textContent = label;
+    let dd;
+    if (href) {
+      dd = document.createElement("a");
+      dd.href = href;
+      if (href.startsWith("http")) {
+        dd.target = "_blank";
+        dd.rel = "noopener noreferrer";
+      }
+    } else {
+      dd = document.createElement("span");
+    }
+    dd.className = "detail-value";
+    dd.textContent = value;
+    row.append(dt, dd);
+    return row;
+  }
+
+  async function openDrawer(appointmentId) {
+    const appt = state.appointments.find((a) => a.id === appointmentId);
+    if (!appt) return;
+    drawerReturnFocus = document.activeElement;
+    el.drawerTitle.textContent = appt.patient_name || "Paciente";
+    const body = el.drawerBody;
+    body.replaceChildren();
+
+    const status = document.createElement("span");
+    const meta = getStatusMeta(appt.status);
+    status.className = `status-badge ${meta.cssClass}`;
+    status.textContent = meta.label;
+    body.appendChild(status);
+
+    const digits = String(appt.patient_phone || "").replace(/\D/g, "");
+    const waNumber = digits.length >= 10 && digits.length <= 11 ? `55${digits}` : digits;
+    const details = document.createElement("div");
+    details.className = "detail-list";
+    details.append(
+      detailRow("Telefone", appt.patient_phone || "—", digits ? `tel:+${waNumber}` : null),
+      detailRow("WhatsApp", digits ? "Abrir conversa" : "—", digits ? `https://wa.me/${waNumber}` : null),
+      detailRow("E-mail", appt.patient_email || "—", appt.patient_email ? `mailto:${appt.patient_email}` : null),
+      detailRow("Especialidade", getSpecialtyNameById(appt.specialty_id)),
+      detailRow("Dia pedido", appt.preferred_date ? formatDateBR(appt.preferred_date) : "—"),
+      detailRow("Consulta", appt.starts_at
+        ? `${formatDateTimeBR(appt.starts_at)} · ${durationLabel(appt.starts_at, appt.ends_at)} · ${getProfessionalNameById(appt.professional_id)}`
+        : "Ainda sem horário"),
+      detailRow("Recebido em", formatDateTimeBR(appt.created_at))
+    );
+    if (appt.message) details.appendChild(detailRow("Mensagem do paciente", appt.message));
+    if (appt.status_reason) details.appendChild(detailRow("Motivo", appt.status_reason));
+    body.appendChild(details);
+
+    const actions = buildAppointmentActions(appt);
+    actions.classList.add("drawer-actions");
+    actions.querySelectorAll("button").forEach((b) => b.addEventListener("click", closeDrawer, { capture: true }));
+    body.appendChild(actions);
+
+    const histTitle = document.createElement("h4");
+    histTitle.textContent = "Histórico";
+    const hist = document.createElement("ol");
+    hist.className = "history-list";
+    const loading = document.createElement("li");
+    loading.textContent = "Carregando histórico...";
+    hist.appendChild(loading);
+    body.append(histTitle, hist);
+
+    el.drawer.hidden = false;
+    el.drawerClose.focus();
+
+    try {
+      const { data, error } = await state.supabase
+        .from("appointment_events")
+        .select("from_status, to_status, actor_email, note, starts_at, created_at")
+        .eq("appointment_id", appt.id)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      hist.replaceChildren();
+      const created = document.createElement("li");
+      created.textContent = `${formatDateTimeBR(appt.created_at)} — Pedido recebido pelo site`;
+      hist.appendChild(created);
+      (data || []).forEach((ev) => {
+        const li = document.createElement("li");
+        const what = {
+          confirmed: ev.from_status === "confirmed" ? "Remarcada" : "Confirmada",
+          cancelled: "Cancelada",
+          completed: "Concluída",
+          no_show: "Paciente não compareceu"
+        }[ev.to_status] || ev.to_status;
+        const slot = ev.to_status === "confirmed" && ev.starts_at ? ` para ${formatDateTimeBR(ev.starts_at)}` : "";
+        const who = ev.actor_email ? ` por ${ev.actor_email}` : "";
+        const note = ev.note ? ` (${ev.note})` : "";
+        li.textContent = `${formatDateTimeBR(ev.created_at)} — ${what}${slot}${who}${note}`;
+        hist.appendChild(li);
+      });
+    } catch (err) {
+      hist.replaceChildren();
+      const li = document.createElement("li");
+      li.textContent = "Não foi possível carregar o histórico agora.";
+      hist.appendChild(li);
+    }
+  }
+
+  function closeDrawer() {
+    el.drawer.hidden = true;
+    if (drawerReturnFocus && document.contains(drawerReturnFocus)) drawerReturnFocus.focus();
+  }
+
+  // Editar profissional ou especialidade (só administrador; o banco também confere)
+  let editContext = null;
+
+  function openEditModal(kind, item) {
+    editContext = { kind, item };
+    const isPro = kind === "pro";
+    el.editTitle.textContent = isPro ? "Editar profissional" : "Editar especialidade";
+    el.editNameLabel.textContent = isPro ? "Nome completo *" : "Nome da especialidade *";
+    el.editName.value = item.name || "";
+    el.editSpecialtyGroup.hidden = !isPro;
+    el.editDescriptionGroup.hidden = isPro;
+    if (isPro) {
+      el.editSpecialty.replaceChildren();
+      const none = document.createElement("option");
+      none.value = "";
+      none.textContent = "Sem especialidade vinculada";
+      el.editSpecialty.appendChild(none);
+      state.specialties.forEach((sp) => {
+        const opt = document.createElement("option");
+        opt.value = sp.id;
+        opt.textContent = sp.name;
+        el.editSpecialty.appendChild(opt);
+      });
+      el.editSpecialty.value = item.specialty_id || "";
+    } else {
+      el.editDescription.value = item.description || "";
+    }
+    el.editFeedback.hidden = true;
+    el.editModal.hidden = false;
+    el.editName.focus();
+  }
+
+  function closeEditModal() {
+    el.editModal.hidden = true;
+    editContext = null;
+  }
+
+  async function handleEditSubmit(event) {
+    event.preventDefault();
+    if (!editContext) return;
+    const { kind, item } = editContext;
+    const name = el.editName.value.trim();
+    if (name.length < 2) {
+      el.editFeedback.textContent = "Informe um nome com pelo menos 2 letras.";
+      el.editFeedback.hidden = false;
+      return;
+    }
+    const table = kind === "pro" ? "professionals" : "specialties";
+    const changes = kind === "pro"
+      ? { name, specialty_id: el.editSpecialty.value || null }
+      : { name, description: el.editDescription.value.trim() || null };
+    el.editSubmit.disabled = true;
+    try {
+      const { clinicId } = await requireAuthorizedContext();
+      const { data, error } = await state.supabase.from(table).update(changes).eq("id", item.id).eq("clinic_id", clinicId).select("id");
+      if (error) throw new Error(translateSupabaseError(error, "Não foi possível salvar as alterações."));
+      if (!data || !data.length) throw new Error("Somente administradores podem alterar este cadastro.");
+      closeEditModal();
+      await loadSpecialties();
+      await loadProfessionals();
+      renderAppointments();
+      updateDashboardHeaderAndStats();
+      showAdminFeedback("Alterações salvas.", "success");
+    } catch (err) {
+      el.editFeedback.textContent = err.message;
+      el.editFeedback.hidden = false;
+    } finally {
+      el.editSubmit.disabled = false;
+    }
+  }
+
+  // Atualiza sozinho a cada minuto, sem atrapalhar quem está preenchendo algo
+  function startAutoRefresh() {
+    setInterval(async () => {
+      const busy = !el.apptModal.hidden || !el.editModal.hidden || !el.confirmModal.hidden;
+      if (document.visibilityState !== "visible" || el.dashboardView.hidden || busy || !state.clinic) return;
+      try {
+        await loadAppointments();
+        updateDashboardHeaderAndStats();
+      } catch (err) {
+        /* falha silenciosa: tenta de novo no próximo minuto */
+      }
+    }, 60000);
+  }
+
   // --- 9. Inicialização da Página ---
 
   async function bootstrap() {
@@ -1261,12 +1723,38 @@
     el.forgotForm.addEventListener("submit", handleForgotSubmit);
     el.recoveryForm.addEventListener("submit", handleRecoverySubmit);
     el.apptForm.addEventListener("submit", handleAppointmentModalSubmit);
+    el.appointmentSearch.addEventListener("input", renderAppointments);
+    el.appointmentPeriod.addEventListener("change", renderAppointments);
+    el.agendaViewBtns.forEach((b) => b.addEventListener("click", () => setAgendaView(b.dataset.agendaView)));
+    el.agendaPrev.addEventListener("click", () => shiftAgenda(-1));
+    el.agendaNext.addEventListener("click", () => shiftAgenda(1));
+    el.agendaToday.addEventListener("click", () => {
+      agendaState.anchor = todayISO();
+      renderAgenda();
+    });
+    el.agendaProfessional.addEventListener("change", () => {
+      agendaState.professional = el.agendaProfessional.value;
+      renderAgenda();
+    });
+    el.drawerClose.addEventListener("click", closeDrawer);
+    el.drawer.addEventListener("click", (event) => {
+      if (event.target === el.drawer) closeDrawer();
+    });
+    el.editForm.addEventListener("submit", handleEditSubmit);
+    el.editCancel.addEventListener("click", closeEditModal);
+    el.editModal.addEventListener("click", (event) => {
+      if (event.target === el.editModal) closeEditModal();
+    });
+    startAutoRefresh();
     el.apptCancelBtn.addEventListener("click", closeAppointmentModal);
     el.apptModal.addEventListener("click", (event) => {
       if (event.target === el.apptModal) closeAppointmentModal();
     });
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && !el.apptModal.hidden) closeAppointmentModal();
+      if (event.key !== "Escape") return;
+      if (!el.apptModal.hidden) closeAppointmentModal();
+      else if (!el.editModal.hidden) closeEditModal();
+      else if (!el.drawer.hidden) closeDrawer();
     });
 
     state.supabase = initSupabaseClient();

@@ -150,22 +150,25 @@
         </article>
 
         <article class="kpi-card">
-          <span class="kpi-label">PROFISSIONAIS ATIVOS</span>
-          <strong class="kpi-value" id="stat-professionals-count">0</strong>
-          <small class="kpi-hint">Corpo clínico cadastrado</small>
+          <span class="kpi-label">CONSULTAS HOJE</span>
+          <strong class="kpi-value" id="stat-today-count">0</strong>
+          <small class="kpi-hint" id="stat-today-hint">Nenhuma consulta marcada</small>
         </article>
 
         <article class="kpi-card">
-          <span class="kpi-label">ESPECIALIDADES</span>
-          <strong class="kpi-value" id="stat-specialties-count">0</strong>
-          <small class="kpi-hint">Áreas de atendimento</small>
+          <span class="kpi-label">PRÓXIMOS 7 DIAS</span>
+          <strong class="kpi-value" id="stat-week-count">0</strong>
+          <small class="kpi-hint">Consultas confirmadas</small>
         </article>
       </section>
 
       <!-- Navegação entre Módulos -->
       <nav class="admin-tabs" aria-label="Módulos administrativos">
-        <button type="button" class="tab-btn active" data-tab="appointments">
-          Agendamentos
+        <button type="button" class="tab-btn active" data-tab="agenda">
+          Agenda
+        </button>
+        <button type="button" class="tab-btn" data-tab="appointments">
+          Pedidos e consultas
         </button>
         <button type="button" class="tab-btn" data-tab="professionals">
           Profissionais
@@ -175,15 +178,47 @@
         </button>
       </nav>
 
+      <!-- MÓDULO 0: AGENDA (dia e semana) -->
+      <section class="module-panel" id="panel-agenda">
+        <div class="panel-header agenda-header">
+          <div>
+            <h2 id="agenda-title">Hoje</h2>
+            <p id="agenda-subtitle">Consultas confirmadas, em horário de Brasília.</p>
+          </div>
+          <div class="panel-actions agenda-controls">
+            <div class="segmented" role="group" aria-label="Visualização">
+              <button type="button" class="seg-btn active" data-agenda-view="day" aria-pressed="true">Dia</button>
+              <button type="button" class="seg-btn" data-agenda-view="week" aria-pressed="false">Semana</button>
+            </div>
+            <div class="date-nav" role="group" aria-label="Navegar entre datas">
+              <button type="button" class="button button-outline button-icon" id="agenda-prev" aria-label="Anterior">‹</button>
+              <button type="button" class="button button-outline" id="agenda-today">Hoje</button>
+              <button type="button" class="button button-outline button-icon" id="agenda-next" aria-label="Próximo">›</button>
+            </div>
+            <select id="agenda-professional" aria-label="Filtrar por profissional">
+              <option value="all">Todos os profissionais</option>
+            </select>
+          </div>
+        </div>
+        <div id="agenda-body" aria-live="polite"></div>
+      </section>
+
       <!-- MÓDULO 1: AGENDAMENTOS -->
-      <section class="module-panel" id="panel-appointments">
+      <section class="module-panel" id="panel-appointments" hidden>
         <div class="panel-header">
           <div>
-            <h2>Solicitações de Agendamento</h2>
-            <p>Acompanhe os pedidos recebidos e atualize o status de atendimento.</p>
+            <h2>Pedidos e consultas</h2>
+            <p>Confirme os pedidos, acompanhe as consultas e consulte o histórico.</p>
           </div>
 
           <div class="panel-actions">
+            <input type="search" id="appointment-search" placeholder="Buscar nome ou telefone" aria-label="Buscar paciente por nome ou telefone" autocomplete="off">
+            <select id="appointment-period-filter" aria-label="Filtrar por período">
+              <option value="all">Qualquer data</option>
+              <option value="today">Hoje</option>
+              <option value="next7">Próximos 7 dias</option>
+              <option value="past">Já passaram</option>
+            </select>
             <select id="appointment-status-filter" aria-label="Filtrar por status">
               <option value="all">Todos os status</option>
               <option value="pending">Pendentes</option>
@@ -315,6 +350,45 @@
         <button type="button" class="button button-danger" id="confirm-accept-btn">Sim, excluir</button>
       </div>
     </div>
+  </div>
+
+  <!-- Detalhe da consulta (painel lateral) -->
+  <div class="drawer-backdrop" id="appt-drawer" hidden>
+    <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+      <div class="drawer-head">
+        <div>
+          <div class="section-kicker">DETALHES DO PACIENTE</div>
+          <h3 id="drawer-title">Paciente</h3>
+        </div>
+        <button type="button" class="button button-ghost button-icon" id="drawer-close" aria-label="Fechar detalhes">✕</button>
+      </div>
+      <div class="drawer-body" id="drawer-body"></div>
+    </aside>
+  </div>
+
+  <!-- Editar profissional ou especialidade -->
+  <div class="modal-backdrop" id="edit-modal" role="dialog" aria-modal="true" aria-labelledby="edit-modal-title" hidden>
+    <form class="modal-card" id="edit-form" novalidate>
+      <div class="section-kicker">EDITAR</div>
+      <h3 id="edit-modal-title">Editar</h3>
+      <div class="field-group">
+        <label for="edit-name" id="edit-name-label">Nome *</label>
+        <input id="edit-name" type="text" maxlength="120" required>
+      </div>
+      <div class="field-group" id="edit-specialty-group">
+        <label for="edit-specialty">Especialidade</label>
+        <select id="edit-specialty"></select>
+      </div>
+      <div class="field-group" id="edit-description-group">
+        <label for="edit-description">Descrição</label>
+        <textarea id="edit-description" rows="3" maxlength="400"></textarea>
+      </div>
+      <div class="alert-box alert-error" id="edit-feedback" role="alert" hidden></div>
+      <div class="modal-actions">
+        <button type="button" class="button button-outline" id="edit-cancel">Voltar</button>
+        <button type="submit" class="button button-primary" id="edit-submit">Salvar alterações</button>
+      </div>
+    </form>
   </div>
 
   <!-- Confirmar, remarcar ou cancelar uma consulta -->
