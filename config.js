@@ -42,8 +42,8 @@ window.FEITIVA_CLINIC_CONFIG = {
     primary: "#102b46",
     primaryHover: "#244b68",
     primaryDark: "#0e263d",
-    secondary: "#668475",
-    secondaryHover: "#47745f",
+    secondary: "#3d6450",
+    secondaryHover: "#355a47",
     secondarySoft: "#dce8e1",
     accent: "#b9d2c2",
     background: "#f6f7f4"
