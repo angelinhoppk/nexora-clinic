@@ -1,0 +1,4 @@
+-- Etapa 4 (aplicada em 25/11/2026 via Supabase MCP, migração "etapa4_pacientes"):
+-- tabela patients (um por telefone em cada clínica), appointments.patient_id,
+-- gatilho link_appointment_patient (liga/cria o paciente a cada pedido novo),
+-- RLS: membros leem e editam nome/e-mail/nascimento/observações; só admin exclui.

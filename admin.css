@@ -928,3 +928,17 @@ a.detail-value { color: var(--navy); font-weight: 600; }
   .detail-row { grid-template-columns: 1fr; gap: 2px; }
   .drawer { padding: 20px; }
 }
+
+/* --- Etapa 4: pacientes --- */
+#patient-search {
+  height: 44px;
+  min-width: 260px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  background: var(--white);
+  font: 13px "DM Sans", sans-serif;
+  color: var(--ink);
+}
+.drawer-patient-link { display: inline-block; margin: -6px 0 18px; font-size: 13px; text-decoration-color: currentColor; }
+.patient-appointments .link-button { font-weight: 500; font-size: 12px; }
+@media (max-width: 720px) { #patient-search { min-width: 0; width: 100%; } }

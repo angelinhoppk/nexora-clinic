@@ -170,6 +170,9 @@
         <button type="button" class="tab-btn" data-tab="appointments">
           Pedidos e consultas
         </button>
+        <button type="button" class="tab-btn" data-tab="patients">
+          Pacientes
+        </button>
         <button type="button" class="tab-btn" data-tab="professionals">
           Profissionais
         </button>
@@ -201,6 +204,33 @@
           </div>
         </div>
         <div id="agenda-body" aria-live="polite"></div>
+      </section>
+
+      <!-- MÓDULO: PACIENTES -->
+      <section class="module-panel" id="panel-patients" hidden>
+        <div class="panel-header">
+          <div>
+            <h2>Pacientes</h2>
+            <p>Cada paciente é criado automaticamente no primeiro pedido, pelo telefone.</p>
+          </div>
+          <div class="panel-actions">
+            <input type="search" id="patient-search" placeholder="Buscar nome, telefone ou e-mail" aria-label="Buscar paciente" autocomplete="off">
+          </div>
+        </div>
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Paciente</th>
+                <th>Telefone</th>
+                <th>Consultas</th>
+                <th>Próxima</th>
+                <th>Faltas e cancelamentos</th>
+              </tr>
+            </thead>
+            <tbody id="patients-list"></tbody>
+          </table>
+        </div>
       </section>
 
       <!-- MÓDULO 1: AGENDAMENTOS -->
@@ -364,6 +394,36 @@
       </div>
       <div class="drawer-body" id="drawer-body"></div>
     </aside>
+  </div>
+
+  <!-- Editar cadastro do paciente -->
+  <div class="modal-backdrop" id="patient-modal" role="dialog" aria-modal="true" aria-labelledby="patient-modal-title" hidden>
+    <form class="modal-card" id="patient-form" novalidate>
+      <div class="section-kicker">CADASTRO</div>
+      <h3 id="patient-modal-title">Editar paciente</h3>
+      <div class="field-group">
+        <label for="patient-name">Nome completo *</label>
+        <input id="patient-name" type="text" maxlength="120" required>
+      </div>
+      <div class="field-group">
+        <label for="patient-email">E-mail</label>
+        <input id="patient-email" type="email" maxlength="160">
+      </div>
+      <div class="field-group">
+        <label for="patient-birth">Data de nascimento</label>
+        <input id="patient-birth" type="date">
+      </div>
+      <div class="field-group">
+        <label for="patient-notes">Observações administrativas</label>
+        <textarea id="patient-notes" rows="3" maxlength="1000"></textarea>
+        <p class="form-hint">Só informações de atendimento (ex.: prefere manhã). Não registre dados clínicos aqui.</p>
+      </div>
+      <div class="alert-box alert-error" id="patient-feedback" role="alert" hidden></div>
+      <div class="modal-actions">
+        <button type="button" class="button button-outline" id="patient-cancel">Voltar</button>
+        <button type="submit" class="button button-primary" id="patient-submit">Salvar cadastro</button>
+      </div>
+    </form>
   </div>
 
   <!-- Editar profissional ou especialidade -->

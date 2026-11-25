@@ -11,7 +11,8 @@
     clinic: null,
     specialties: [],
     professionals: [],
-    appointments: []
+    appointments: [],
+    patients: []
   };
 
   // --- Referências de elementos do DOM ---
@@ -41,6 +42,7 @@
     tabButtons: document.querySelectorAll(".tab-btn"),
     panels: {
       agenda: document.getElementById("panel-agenda"),
+      patients: document.getElementById("panel-patients"),
       appointments: document.getElementById("panel-appointments"),
       professionals: document.getElementById("panel-professionals"),
       specialties: document.getElementById("panel-specialties")
@@ -61,6 +63,17 @@
     drawerTitle: document.getElementById("drawer-title"),
     drawerBody: document.getElementById("drawer-body"),
     drawerClose: document.getElementById("drawer-close"),
+    patientSearch: document.getElementById("patient-search"),
+    patientsList: document.getElementById("patients-list"),
+    patientModal: document.getElementById("patient-modal"),
+    patientForm: document.getElementById("patient-form"),
+    patientName: document.getElementById("patient-name"),
+    patientEmail: document.getElementById("patient-email"),
+    patientBirth: document.getElementById("patient-birth"),
+    patientNotes: document.getElementById("patient-notes"),
+    patientFeedback: document.getElementById("patient-feedback"),
+    patientCancel: document.getElementById("patient-cancel"),
+    patientSubmit: document.getElementById("patient-submit"),
     editModal: document.getElementById("edit-modal"),
     editForm: document.getElementById("edit-form"),
     editTitle: document.getElementById("edit-modal-title"),
@@ -346,6 +359,7 @@
     state.specialties = [];
     state.professionals = [];
     state.appointments = [];
+    state.patients = [];
   }
 
   /**
@@ -465,6 +479,7 @@
       : todays.length ? "Nenhuma outra consulta hoje" : "Nenhuma consulta marcada";
     el.statWeekCount.textContent = String(nextWeek.length);
     renderAgenda();
+    renderPatients();
   }
 
   async function loadSpecialties() {
@@ -508,7 +523,7 @@
 
     const { data, error } = await state.supabase
       .from("appointments")
-      .select("id, clinic_id, patient_name, patient_phone, patient_email, specialty_id, preferred_date, message, status, status_reason, professional_id, starts_at, ends_at, created_at")
+      .select("id, clinic_id, patient_id, patient_name, patient_phone, patient_email, specialty_id, preferred_date, message, status, status_reason, professional_id, starts_at, ends_at, created_at")
       .eq("clinic_id", clinicId)
       .order("created_at", { ascending: false })
       .limit(500);
@@ -524,7 +539,7 @@
   async function loadAllClinicData() {
     // Carrega especialidades primeiro para mapear specialty_id -> nome
     await loadSpecialties();
-    await Promise.all([loadProfessionals(), loadAppointments()]);
+    await Promise.all([loadProfessionals(), loadAppointments(), loadPatients()]);
     renderAppointments(); // de novo, agora com os nomes dos profissionais carregados
     updateDashboardHeaderAndStats();
   }
@@ -1553,6 +1568,15 @@
     if (appt.status_reason) details.appendChild(detailRow("Motivo", appt.status_reason));
     body.appendChild(details);
 
+    if (appt.patient_id && (state.patients || []).some((p) => p.id === appt.patient_id)) {
+      const goPatient = document.createElement("button");
+      goPatient.type = "button";
+      goPatient.className = "link-button drawer-patient-link";
+      goPatient.textContent = "Ver ficha completa do paciente";
+      goPatient.addEventListener("click", () => openPatientDrawer(appt.patient_id));
+      body.appendChild(goPatient);
+    }
+
     const actions = buildAppointmentActions(appt);
     actions.classList.add("drawer-actions");
     actions.querySelectorAll("button").forEach((b) => b.addEventListener("click", closeDrawer, { capture: true }));
@@ -1682,7 +1706,7 @@
   // Atualiza sozinho a cada minuto, sem atrapalhar quem está preenchendo algo
   function startAutoRefresh() {
     setInterval(async () => {
-      const busy = !el.apptModal.hidden || !el.editModal.hidden || !el.confirmModal.hidden;
+      const busy = !el.apptModal.hidden || !el.editModal.hidden || !el.confirmModal.hidden || !el.patientModal.hidden;
       if (document.visibilityState !== "visible" || el.dashboardView.hidden || busy || !state.clinic) return;
       try {
         await loadAppointments();
@@ -1691,6 +1715,215 @@
         /* falha silenciosa: tenta de novo no próximo minuto */
       }
     }, 60000);
+  }
+
+  // --- Pacientes ---
+
+  async function loadPatients() {
+    const { clinicId } = await requireAuthorizedContext();
+    const { data, error } = await state.supabase
+      .from("patients")
+      .select("id, full_name, phone, email, birth_date, admin_notes, created_at")
+      .eq("clinic_id", clinicId)
+      .order("full_name", { ascending: true })
+      .limit(2000);
+    if (error) throw new Error(translateSupabaseError(error, "Erro ao carregar pacientes."));
+    state.patients = Array.isArray(data) ? data : [];
+    renderPatients();
+  }
+
+  function plural(n, one, many) {
+    return `${n} ${n === 1 ? one : many}`;
+  }
+
+  function patientStats(patientId) {
+    const list = state.appointments.filter((a) => a.patient_id === patientId);
+    const now = Date.now();
+    const next = list
+      .filter((a) => a.status === "confirmed" && a.starts_at && new Date(a.starts_at).getTime() >= now)
+      .sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at))[0] || null;
+    return {
+      list,
+      total: list.length,
+      completed: list.filter((a) => a.status === "completed").length,
+      cancelled: list.filter((a) => a.status === "cancelled").length,
+      noShow: list.filter((a) => a.status === "no_show").length,
+      next
+    };
+  }
+
+  function renderPatients() {
+    if (!el.patientsList) return;
+    const term = normalizeText(el.patientSearch.value);
+    const digits = el.patientSearch.value.replace(/\D/g, "");
+    const rows = (state.patients || []).filter((p) => {
+      if (!term) return true;
+      return normalizeText(p.full_name).includes(term) ||
+        normalizeText(p.email).includes(term) ||
+        (digits.length >= 3 && String(p.phone || "").replace(/\D/g, "").includes(digits));
+    });
+    el.patientsList.replaceChildren();
+    if (!rows.length) {
+      const tr = document.createElement("tr");
+      const td = document.createElement("td");
+      td.colSpan = 5;
+      td.className = "empty-state";
+      td.textContent = term ? "Nenhum paciente encontrado com essa busca." : "Os pacientes aparecem aqui assim que fizerem o primeiro pedido pelo site.";
+      tr.appendChild(td);
+      el.patientsList.appendChild(tr);
+      return;
+    }
+    rows.forEach((p) => {
+      const st = patientStats(p.id);
+      const tr = document.createElement("tr");
+      const tdName = document.createElement("td");
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "link-button";
+      btn.textContent = p.full_name;
+      btn.addEventListener("click", () => openPatientDrawer(p.id));
+      tdName.appendChild(btn);
+      if (p.email) {
+        const sub = document.createElement("span");
+        sub.className = "patient-sub";
+        sub.textContent = p.email;
+        tdName.appendChild(sub);
+      }
+      const tdPhone = document.createElement("td");
+      tdPhone.textContent = p.phone;
+      const tdTotal = document.createElement("td");
+      tdTotal.textContent = st.total === 1 ? "1 pedido" : `${st.total} pedidos`;
+      const tdNext = document.createElement("td");
+      tdNext.textContent = st.next ? formatDateTimeBR(st.next.starts_at) : "—";
+      const tdIssues = document.createElement("td");
+      tdIssues.textContent = st.noShow || st.cancelled
+        ? `${st.noShow} ${st.noShow === 1 ? "falta" : "faltas"} · ${st.cancelled} ${st.cancelled === 1 ? "cancelamento" : "cancelamentos"}`
+        : "Nenhum";
+      [[tdName, "Paciente"], [tdPhone, "Telefone"], [tdTotal, "Consultas"], [tdNext, "Próxima"], [tdIssues, "Faltas e cancelamentos"]]
+        .forEach(([td, label]) => td.setAttribute("data-label", label));
+      tr.append(tdName, tdPhone, tdTotal, tdNext, tdIssues);
+      el.patientsList.appendChild(tr);
+    });
+  }
+
+  let patientEditing = null;
+
+  function openPatientDrawer(patientId) {
+    const p = (state.patients || []).find((x) => x.id === patientId);
+    if (!p) return;
+    drawerReturnFocus = document.activeElement;
+    const st = patientStats(p.id);
+    el.drawerTitle.textContent = p.full_name;
+    const body = el.drawerBody;
+    body.replaceChildren();
+
+    const digits = String(p.phone || "").replace(/\D/g, "");
+    const waNumber = digits.length >= 10 && digits.length <= 11 ? `55${digits}` : digits;
+    const details = document.createElement("div");
+    details.className = "detail-list";
+    details.append(
+      detailRow("Telefone", p.phone, `tel:+${waNumber}`),
+      detailRow("WhatsApp", "Abrir conversa", `https://wa.me/${waNumber}`),
+      detailRow("E-mail", p.email || "—", p.email ? `mailto:${p.email}` : null),
+      detailRow("Nascimento", p.birth_date ? formatDateBR(p.birth_date) : "—"),
+      detailRow("Paciente desde", formatDateBR(p.created_at)),
+      detailRow("Resumo", [plural(st.total, "pedido", "pedidos"), plural(st.completed, "concluída", "concluídas"), plural(st.noShow, "falta", "faltas"), plural(st.cancelled, "cancelamento", "cancelamentos")].join(" · "))
+    );
+    if (p.admin_notes) details.appendChild(detailRow("Observações", p.admin_notes));
+    body.appendChild(details);
+
+    const actions = document.createElement("div");
+    actions.className = "row-actions drawer-actions";
+    actions.appendChild(actionButton("Editar cadastro", "button-outline", () => {
+      closeDrawer();
+      openPatientModal(p);
+    }));
+    body.appendChild(actions);
+
+    const title = document.createElement("h4");
+    title.textContent = "Consultas e pedidos";
+    const list = document.createElement("ol");
+    list.className = "history-list patient-appointments";
+    st.list
+      .slice()
+      .sort((a, b) => appointmentSortKey(b) - appointmentSortKey(a))
+      .forEach((a) => {
+        const li = document.createElement("li");
+        const link = document.createElement("button");
+        link.type = "button";
+        link.className = "link-button";
+        const when = a.starts_at ? formatDateTimeBR(a.starts_at) : `Pedido para ${a.preferred_date ? formatDateBR(a.preferred_date) : "data não informada"}`;
+        link.textContent = `${when} · ${getSpecialtyNameById(a.specialty_id)} · ${getStatusMeta(a.status).label}`;
+        link.addEventListener("click", () => openDrawer(a.id));
+        li.appendChild(link);
+        list.appendChild(li);
+      });
+    if (!st.list.length) {
+      const li = document.createElement("li");
+      li.textContent = "Nenhum pedido carregado.";
+      list.appendChild(li);
+    }
+    body.append(title, list);
+    el.drawer.hidden = false;
+    el.drawerClose.focus();
+  }
+
+  function openPatientModal(p) {
+    patientEditing = p;
+    el.patientName.value = p.full_name || "";
+    el.patientEmail.value = p.email || "";
+    el.patientBirth.value = p.birth_date || "";
+    el.patientBirth.max = todayISO();
+    el.patientNotes.value = p.admin_notes || "";
+    el.patientFeedback.hidden = true;
+    el.patientModal.hidden = false;
+    el.patientName.focus();
+  }
+
+  function closePatientModal() {
+    el.patientModal.hidden = true;
+    patientEditing = null;
+  }
+
+  async function handlePatientSubmit(event) {
+    event.preventDefault();
+    if (!patientEditing) return;
+    const fail = (msg) => {
+      el.patientFeedback.textContent = msg;
+      el.patientFeedback.hidden = false;
+    };
+    const name = el.patientName.value.trim();
+    const email = el.patientEmail.value.trim();
+    if (name.length < 2) return fail("Informe o nome completo.");
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail("Informe um e-mail válido ou deixe em branco.");
+    if (el.patientBirth.value && el.patientBirth.value > todayISO()) return fail("A data de nascimento não pode ser no futuro.");
+    el.patientSubmit.disabled = true;
+    try {
+      const { clinicId } = await requireAuthorizedContext();
+      const { data, error } = await state.supabase
+        .from("patients")
+        .update({
+          full_name: name,
+          email: email || null,
+          birth_date: el.patientBirth.value || null,
+          admin_notes: el.patientNotes.value.trim() || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", patientEditing.id)
+        .eq("clinic_id", clinicId)
+        .select("id");
+      if (error) throw new Error(translateSupabaseError(error, "Não foi possível salvar o cadastro."));
+      if (!data || !data.length) throw new Error("Você não tem permissão para alterar este cadastro.");
+      const id = patientEditing.id;
+      closePatientModal();
+      await loadPatients();
+      showAdminFeedback("Cadastro do paciente salvo.", "success");
+      openPatientDrawer(id);
+    } catch (err) {
+      fail(err.message);
+    } finally {
+      el.patientSubmit.disabled = false;
+    }
   }
 
   // --- 9. Inicialização da Página ---
@@ -1741,6 +1974,12 @@
       if (event.target === el.drawer) closeDrawer();
     });
     el.editForm.addEventListener("submit", handleEditSubmit);
+    el.patientSearch.addEventListener("input", renderPatients);
+    el.patientForm.addEventListener("submit", handlePatientSubmit);
+    el.patientCancel.addEventListener("click", closePatientModal);
+    el.patientModal.addEventListener("click", (event) => {
+      if (event.target === el.patientModal) closePatientModal();
+    });
     el.editCancel.addEventListener("click", closeEditModal);
     el.editModal.addEventListener("click", (event) => {
       if (event.target === el.editModal) closeEditModal();
@@ -1753,6 +1992,7 @@
     document.addEventListener("keydown", (event) => {
       if (event.key !== "Escape") return;
       if (!el.apptModal.hidden) closeAppointmentModal();
+      else if (!el.patientModal.hidden) closePatientModal();
       else if (!el.editModal.hidden) closeEditModal();
       else if (!el.drawer.hidden) closeDrawer();
     });
