@@ -472,7 +472,7 @@
     intro: "Preencha os dados abaixo e nossa equipe entrará em contato para confirmar o melhor horário para você.",
     detail: "Respondemos às solicitações em horário comercial, pelo telefone ou e-mail informados.",
     kicker: "SOLICITAÇÃO DE CONSULTA",
-    consent: "Autorizo a clínica a usar estes dados para entrar em contato sobre o meu agendamento.",
+    consent: "Li o aviso de privacidade e autorizo a clínica a usar estes dados para entrar em contato sobre o meu agendamento.",
     submit: "Solicitar consulta",
     privacy: "Seus dados são usados apenas para o contato sobre esta solicitação."
   };
@@ -614,7 +614,8 @@
         specialty_id: specialtySelect ? specialtySelect.value : "",
         preferred_date: dateInput ? dateInput.value : "",
         message: messageInput ? messageInput.value.trim() : "",
-        website: honeypot ? honeypot.value : ""
+        website: honeypot ? honeypot.value : "",
+        consent: Boolean(document.querySelector("#consent") && document.querySelector("#consent").checked)
       };
 
       isSubmitting = true;

@@ -1,7 +1,7 @@
 // Feitiva Clinic — Edge Function pública de agendamento
 // ---------------------------------------------------------------------------
 // GET  ?clinic=<slug>  → dados públicos da clínica (nome, especialidades, profissionais)
-// POST { clinic, name, email, phone, specialty_id, preferred_date, message } → cria solicitação
+// POST { clinic, name, email, phone, specialty_id, preferred_date, message, consent } → cria solicitação
 //
 // Segurança:
 // - O visitante nunca acessa o banco diretamente: só esta função grava, com validação no servidor.
@@ -9,6 +9,7 @@
 //   nunca no navegador.
 // - A clínica é identificada pelo slug e toda checagem (especialidade, limite de envios)
 //   é feita dentro dessa clínica — uma clínica nunca recebe dados de outra.
+// - O consentimento (LGPD) é obrigatório e fica gravado com data e versão do aviso.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -36,6 +37,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_REQUESTS_PER_PHONE_24H = 3;
+// Versão do aviso de privacidade aceito pelo paciente (privacidade.html)
+const CONSENT_VERSION = "aviso-privacidade-v1-2026-11-25";
 
 // Data de hoje no fuso de São Paulo, no formato AAAA-MM-DD
 function todaySaoPaulo(): string {
@@ -117,6 +120,7 @@ async function handlePost(req: Request) {
   if (!EMAIL_RE.test(email)) errors.push("Informe um e-mail válido.");
   if (!phone) errors.push("Informe um telefone com DDD.");
   if (!UUID_RE.test(specialtyId)) errors.push("Selecione uma especialidade.");
+  if (body.consent !== true) errors.push("Para enviar, autorize o uso dos seus dados para o contato sobre o agendamento.");
 
   const today = todaySaoPaulo();
   if (!DATE_RE.test(preferredDate) || preferredDate < today || preferredDate > addDays(today, 365)) {
@@ -149,6 +153,8 @@ async function handlePost(req: Request) {
     preferred_date: preferredDate,
     message: message || null,
     status: "pending",
+    consent_at: new Date().toISOString(),
+    consent_version: CONSENT_VERSION,
   });
   if (insertError) throw insertError;
 
