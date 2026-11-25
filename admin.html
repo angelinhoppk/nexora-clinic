@@ -66,6 +66,35 @@
         <button class="button button-primary button-full" id="login-submit" type="submit">
           Entrar no painel <span>↗</span>
         </button>
+
+        <button class="text-button" id="forgot-open" type="button">Esqueci minha senha</button>
+      </form>
+
+      <!-- Recuperação de senha: pedir o link -->
+      <form class="admin-form" id="forgot-form" novalidate hidden>
+        <p class="form-hint">Informe o e-mail de acesso. Se ele estiver cadastrado, enviaremos um link para criar uma nova senha.</p>
+        <div class="field-group">
+          <label for="forgot-email">E-mail</label>
+          <input id="forgot-email" name="email" type="email" placeholder="seuemail@clinica.com" autocomplete="email" required>
+        </div>
+        <div class="alert-box" id="forgot-feedback" role="status" hidden></div>
+        <button class="button button-primary button-full" id="forgot-submit" type="submit">Enviar link de recuperação</button>
+        <button class="text-button" id="forgot-back" type="button">Voltar para o login</button>
+      </form>
+
+      <!-- Recuperação de senha: definir a nova senha (aberto pelo link do e-mail) -->
+      <form class="admin-form" id="recovery-form" novalidate hidden>
+        <p class="form-hint">Crie uma nova senha para acessar o painel. Use pelo menos 8 caracteres.</p>
+        <div class="field-group">
+          <label for="recovery-password">Nova senha</label>
+          <input id="recovery-password" name="password" type="password" autocomplete="new-password" minlength="8" required>
+        </div>
+        <div class="field-group">
+          <label for="recovery-confirm">Repita a nova senha</label>
+          <input id="recovery-confirm" name="confirm" type="password" autocomplete="new-password" minlength="8" required>
+        </div>
+        <div class="alert-box" id="recovery-feedback" role="status" hidden></div>
+        <button class="button button-primary button-full" id="recovery-submit" type="submit">Salvar nova senha</button>
       </form>
 
       <div class="login-footer">
@@ -199,6 +228,7 @@
         </div>
 
         <div class="split-layout">
+          <p class="admin-only-note" data-admin-note hidden>Somente administradores podem cadastrar ou alterar profissionais e especialidades.</p>
           <form class="card-form" id="professional-form">
             <h3>Cadastrar profissional</h3>
 
@@ -238,6 +268,7 @@
         </div>
 
         <div class="split-layout">
+          <p class="admin-only-note" data-admin-note hidden>Somente administradores podem cadastrar ou alterar profissionais e especialidades.</p>
           <form class="card-form" id="specialty-form">
             <h3>Cadastrar especialidade</h3>
 

@@ -64,7 +64,20 @@
     confirmTitle: document.getElementById("confirm-title"),
     confirmMessage: document.getElementById("confirm-message"),
     confirmCancelBtn: document.getElementById("confirm-cancel-btn"),
-    confirmAcceptBtn: document.getElementById("confirm-accept-btn")
+    confirmAcceptBtn: document.getElementById("confirm-accept-btn"),
+
+    forgotOpenBtn: document.getElementById("forgot-open"),
+    forgotForm: document.getElementById("forgot-form"),
+    forgotEmail: document.getElementById("forgot-email"),
+    forgotFeedback: document.getElementById("forgot-feedback"),
+    forgotSubmit: document.getElementById("forgot-submit"),
+    forgotBackBtn: document.getElementById("forgot-back"),
+    recoveryForm: document.getElementById("recovery-form"),
+    recoveryPassword: document.getElementById("recovery-password"),
+    recoveryConfirm: document.getElementById("recovery-confirm"),
+    recoveryFeedback: document.getElementById("recovery-feedback"),
+    recoverySubmit: document.getElementById("recovery-submit"),
+    adminNotes: document.querySelectorAll("[data-admin-note]")
   };
 
   // --- 1. Identidade Visual White-Label no Painel ---
@@ -839,6 +852,7 @@
     }
 
     showScreen("dashboard");
+    applyRolePermissions();
     await loadAllClinicData();
   }
 
@@ -912,6 +926,99 @@
     });
   }
 
+  // --- 8b. Recuperação de senha ---
+
+  // O link do e-mail volta para esta página com "type=recovery" no endereço.
+  // Guardamos isso antes de o Supabase limpar o endereço.
+  const openedFromRecoveryLink =
+    /type=recovery/.test(window.location.hash) || /type=recovery/.test(window.location.search);
+  let recoveryMode = openedFromRecoveryLink;
+
+  function setFormFeedback(box, message, type) {
+    if (!box) return;
+    box.hidden = !message;
+    box.textContent = message || "";
+    box.className = `alert-box ${type === "error" ? "alert-error" : "alert-success"}`;
+  }
+
+  function showLoginPanel(panel) {
+    el.loginForm.hidden = panel !== "login";
+    el.forgotForm.hidden = panel !== "forgot";
+    el.recoveryForm.hidden = panel !== "recovery";
+    const focusTarget = { login: el.loginEmail, forgot: el.forgotEmail, recovery: el.recoveryPassword }[panel];
+    if (focusTarget) focusTarget.focus();
+  }
+
+  async function handleForgotSubmit(event) {
+    event.preventDefault();
+    const email = el.forgotEmail.value.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setFormFeedback(el.forgotFeedback, "Informe um e-mail válido.", "error");
+      return;
+    }
+    el.forgotSubmit.disabled = true;
+    try {
+      const redirectTo = `${window.location.origin}${window.location.pathname}`;
+      const { error } = await state.supabase.auth.resetPasswordForEmail(email, { redirectTo });
+      if (error) throw error;
+      // Mesma resposta para e-mail cadastrado ou não, para não revelar quem tem acesso.
+      setFormFeedback(
+        el.forgotFeedback,
+        "Se este e-mail tiver acesso ao painel, você receberá um link em alguns minutos. Confira também a caixa de spam.",
+        "success"
+      );
+    } catch (err) {
+      setFormFeedback(
+        el.forgotFeedback,
+        translateSupabaseError(err, "Não foi possível enviar o link agora. Tente novamente em alguns minutos."),
+        "error"
+      );
+    } finally {
+      el.forgotSubmit.disabled = false;
+    }
+  }
+
+  async function handleRecoverySubmit(event) {
+    event.preventDefault();
+    const password = el.recoveryPassword.value;
+    const confirm = el.recoveryConfirm.value;
+    if (password.length < 8) {
+      setFormFeedback(el.recoveryFeedback, "A nova senha precisa ter pelo menos 8 caracteres.", "error");
+      return;
+    }
+    if (password !== confirm) {
+      setFormFeedback(el.recoveryFeedback, "As duas senhas não são iguais.", "error");
+      return;
+    }
+    el.recoverySubmit.disabled = true;
+    try {
+      const { error } = await state.supabase.auth.updateUser({ password });
+      if (error) throw error;
+      recoveryMode = false;
+      el.recoveryForm.reset();
+      setFormFeedback(el.recoveryFeedback, "", "success");
+      await enterDashboard();
+      showAdminFeedback("Senha alterada com sucesso.", "success");
+    } catch (err) {
+      setFormFeedback(
+        el.recoveryFeedback,
+        translateSupabaseError(err, "Não foi possível salvar a nova senha. Peça um novo link e tente de novo."),
+        "error"
+      );
+    } finally {
+      el.recoverySubmit.disabled = false;
+    }
+  }
+
+  function applyRolePermissions() {
+    const admin = isAdmin();
+    el.professionalForm.hidden = !admin;
+    el.specialtyForm.hidden = !admin;
+    el.adminNotes.forEach((note) => {
+      note.hidden = admin;
+    });
+  }
+
   // --- 9. Inicialização da Página ---
 
   async function bootstrap() {
@@ -933,17 +1040,37 @@
 
     el.professionalForm.addEventListener("submit", handleCreateProfessional);
     el.specialtyForm.addEventListener("submit", handleCreateSpecialty);
+    el.forgotOpenBtn.addEventListener("click", () => {
+      el.forgotEmail.value = el.loginEmail.value.trim();
+      setFormFeedback(el.forgotFeedback, "", "success");
+      showLoginPanel("forgot");
+    });
+    el.forgotBackBtn.addEventListener("click", () => showLoginPanel("login"));
+    el.forgotForm.addEventListener("submit", handleForgotSubmit);
+    el.recoveryForm.addEventListener("submit", handleRecoverySubmit);
 
     state.supabase = initSupabaseClient();
     if (!state.supabase) return;
 
     // Monitora expiração ou encerramento de sessão em tempo real
     state.supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") {
+        recoveryMode = true;
+        showScreen("login");
+        showLoginPanel("recovery");
+        return;
+      }
       if (event === "SIGNED_OUT") {
         resetPrivateState();
         showScreen("login");
       }
     });
+
+    if (recoveryMode) {
+      showScreen("login");
+      showLoginPanel("recovery");
+      return;
+    }
 
     try {
       await enterDashboard();

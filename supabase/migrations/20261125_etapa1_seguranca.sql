@@ -1,0 +1,25 @@
+-- Etapa 1 da auditoria (aplicada em 25/11/2026 via Supabase MCP)
+revoke all on table public.clinics, public.clinic_members, public.specialties, public.professionals, public.appointments from anon;
+alter default privileges in schema public revoke all on tables from anon;
+revoke execute on function public.is_clinic_member(uuid) from public, anon;
+revoke execute on function public.is_clinic_admin(uuid) from public, anon;
+grant execute on function public.is_clinic_member(uuid) to authenticated;
+grant execute on function public.is_clinic_admin(uuid) to authenticated;
+drop policy if exists "Members can add professionals" on public.professionals;
+drop policy if exists "Members can update professionals" on public.professionals;
+create policy "Admins can add professionals" on public.professionals for insert to authenticated with check (public.is_clinic_admin(clinic_id));
+create policy "Admins can update professionals" on public.professionals for update to authenticated using (public.is_clinic_admin(clinic_id)) with check (public.is_clinic_admin(clinic_id));
+drop policy if exists "Members can add specialties" on public.specialties;
+drop policy if exists "Members can update specialties" on public.specialties;
+create policy "Admins can add specialties" on public.specialties for insert to authenticated with check (public.is_clinic_admin(clinic_id));
+create policy "Admins can update specialties" on public.specialties for update to authenticated using (public.is_clinic_admin(clinic_id)) with check (public.is_clinic_admin(clinic_id));
+revoke update on table public.appointments from authenticated;
+grant update (status) on table public.appointments to authenticated;
+create index if not exists appointments_clinic_date_idx on public.appointments (clinic_id, preferred_date);
+create index if not exists appointments_clinic_created_idx on public.appointments (clinic_id, created_at desc);
+create index if not exists appointments_clinic_phone_created_idx on public.appointments (clinic_id, patient_phone, created_at);
+create index if not exists appointments_specialty_idx on public.appointments (specialty_id);
+create index if not exists professionals_clinic_idx on public.professionals (clinic_id);
+create index if not exists professionals_specialty_idx on public.professionals (specialty_id);
+create index if not exists specialties_clinic_idx on public.specialties (clinic_id);
+create index if not exists clinic_members_user_idx on public.clinic_members (user_id);
