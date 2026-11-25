@@ -1,0 +1,5 @@
+-- Etapa 6 (aplicada em 25/11/2026 via Supabase MCP, migração "etapa6_bloqueios_intervalo"):
+-- clinics.appointment_buffer_minutes (intervalo mínimo entre consultas, só admin altera);
+-- tabela schedule_blocks (férias, ausências, feriados; sem profissional = clínica toda) com RLS;
+-- change_appointment passa a recusar horários bloqueados e consultas sem o intervalo mínimo.
+-- Bateria de 20 cenários executada em transação com rollback: todos aprovados.

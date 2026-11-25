@@ -482,6 +482,55 @@
               <button type="button" class="button button-outline" id="download-qr">Baixar QR Code</button>
             </div>
           </div>
+          <div class="card-form" id="blocks-card">
+            <h3>Bloqueios e intervalo</h3>
+            <p class="form-hint">Férias, ausências, feriados e dias fechados. O painel não deixa confirmar consulta em horário bloqueado.</p>
+            <form id="block-form" class="team-form block-form" novalidate>
+              <div class="field-group">
+                <label for="block-professional">Quem fica indisponível</label>
+                <select id="block-professional"></select>
+              </div>
+              <div class="field-row field-row-2">
+                <div class="field-group">
+                  <label for="block-start-date">De *</label>
+                  <input id="block-start-date" type="date" required>
+                </div>
+                <div class="field-group">
+                  <label for="block-start-time">Hora</label>
+                  <input id="block-start-time" type="time" step="300">
+                </div>
+                <div class="field-group">
+                  <label for="block-end-date">Até *</label>
+                  <input id="block-end-date" type="date" required>
+                </div>
+                <div class="field-group">
+                  <label for="block-end-time">Hora</label>
+                  <input id="block-end-time" type="time" step="300">
+                </div>
+              </div>
+              <p class="form-hint">Sem hora = dia inteiro. Horário de Brasília.</p>
+              <div class="field-group">
+                <label for="block-reason">Motivo *</label>
+                <input id="block-reason" type="text" maxlength="120" placeholder="Ex.: Férias, Feriado, Congresso">
+              </div>
+              <button class="button button-primary" id="block-submit" type="submit">Bloquear agenda</button>
+            </form>
+            <div id="blocks-list"></div>
+            <div class="team-form">
+              <h4>Intervalo entre consultas</h4>
+              <div class="share-row">
+                <select id="buffer-select" aria-label="Intervalo mínimo entre consultas do mesmo profissional">
+                  <option value="0">Sem intervalo</option>
+                  <option value="5">5 minutos</option>
+                  <option value="10">10 minutos</option>
+                  <option value="15">15 minutos</option>
+                  <option value="20">20 minutos</option>
+                  <option value="30">30 minutos</option>
+                </select>
+                <button type="button" class="button button-outline" id="buffer-save">Salvar</button>
+              </div>
+            </div>
+          </div>
           <div class="card-form" id="team-card">
             <h3>Equipe</h3>
             <p class="form-hint" id="team-hint">Administradores gerenciam tudo. Equipe vê a agenda, confirma e cancela consultas e edita pacientes.</p>

@@ -13,7 +13,8 @@
     professionals: [],
     appointments: [],
     patients: [],
-    waitlist: []
+    waitlist: [],
+    blocks: []
   };
 
   // --- Referências de elementos do DOM ---
@@ -99,6 +100,18 @@
     bookingQr: document.getElementById("booking-qr"),
     downloadQr: document.getElementById("download-qr"),
     teamCard: document.getElementById("team-card"),
+    blocksCard: document.getElementById("blocks-card"),
+    blockForm: document.getElementById("block-form"),
+    blockProfessional: document.getElementById("block-professional"),
+    blockStartDate: document.getElementById("block-start-date"),
+    blockStartTime: document.getElementById("block-start-time"),
+    blockEndDate: document.getElementById("block-end-date"),
+    blockEndTime: document.getElementById("block-end-time"),
+    blockReason: document.getElementById("block-reason"),
+    blockSubmit: document.getElementById("block-submit"),
+    blocksList: document.getElementById("blocks-list"),
+    bufferSelect: document.getElementById("buffer-select"),
+    bufferSave: document.getElementById("buffer-save"),
     teamList: document.getElementById("team-list"),
     teamForm: document.getElementById("team-form"),
     teamEmail: document.getElementById("team-email"),
@@ -434,7 +447,7 @@
     // Busca os dados da clínica correspondente ao clinic_id obtido do banco
     const { data: clinic, error: clinicError } = await state.supabase
       .from("clinics")
-      .select("id, name, slug")
+      .select("id, name, slug, appointment_buffer_minutes")
       .eq("id", membership.clinic_id)
       .single();
 
@@ -550,6 +563,7 @@
     renderProfessionals();
     populateAgendaProfessionals();
     if (el.waitlistList) renderWaitlist();
+    if (el.blocksList) renderBlocks();
   }
 
   async function loadAppointments() {
@@ -573,7 +587,7 @@
   async function loadAllClinicData() {
     // Carrega especialidades primeiro para mapear specialty_id -> nome
     await loadSpecialties();
-    await Promise.all([loadProfessionals(), loadAppointments(), loadPatients(), loadWaitlist()]);
+    await Promise.all([loadProfessionals(), loadAppointments(), loadPatients(), loadWaitlist(), loadBlocks()]);
     renderAppointments(); // de novo, agora com os nomes dos profissionais carregados
     updateDashboardHeaderAndStats();
   }
@@ -1470,6 +1484,7 @@
       const items = agendaItemsForDay(day);
       const list = document.createElement("div");
       list.className = "agenda-day";
+      blocksForDay(day).forEach((b) => list.appendChild(buildBlockNote(b, false)));
       if (!items.length) {
         const empty = document.createElement("p");
         empty.className = "empty-state";
@@ -1522,7 +1537,9 @@
       head.addEventListener("click", () => setAgendaView("day", day));
       col.appendChild(head);
       const items = agendaItemsForDay(day);
-      if (!items.length) {
+      const dayBlocks = blocksForDay(day);
+      dayBlocks.forEach((b) => col.appendChild(buildBlockNote(b, true)));
+      if (!items.length && !dayBlocks.length) {
         const none = document.createElement("span");
         none.className = "agenda-none";
         none.textContent = "Livre";
@@ -2460,6 +2477,153 @@
     }
   }
 
+  // --- Bloqueios de agenda e intervalo entre consultas ---
+
+  async function loadBlocks() {
+    const { clinicId } = await requireAuthorizedContext();
+    const since = new Date(Date.now() - 31 * 86400000).toISOString();
+    const { data, error } = await state.supabase
+      .from("schedule_blocks")
+      .select("id, professional_id, starts_at, ends_at, reason")
+      .eq("clinic_id", clinicId)
+      .gte("ends_at", since)
+      .order("starts_at", { ascending: true })
+      .limit(500);
+    if (error) throw new Error(translateSupabaseError(error, "Erro ao carregar os bloqueios."));
+    state.blocks = Array.isArray(data) ? data : [];
+    renderBlocks();
+  }
+
+  function blocksForDay(day) {
+    const dayStart = new Date(`${day}T00:00:00${CLINIC_UTC_OFFSET}`).getTime();
+    const dayEnd = dayStart + 86400000;
+    return (state.blocks || []).filter((b) =>
+      new Date(b.starts_at).getTime() < dayEnd && new Date(b.ends_at).getTime() > dayStart &&
+      (agendaState.professional === "all" || !b.professional_id || b.professional_id === agendaState.professional));
+  }
+
+  function blockWho(b) {
+    return b.professional_id ? getProfessionalNameById(b.professional_id) : "Clínica toda";
+  }
+
+  function blockWhen(b) {
+    const s = localDateTimeParts(b.starts_at);
+    const e = localDateTimeParts(new Date(new Date(b.ends_at).getTime() - 1).toISOString());
+    const fullDays = s.time === "00:00" && localDateTimeParts(b.ends_at).time === "00:00";
+    if (fullDays) {
+      return s.date === e.date ? `${formatDateBR(s.date)}, dia inteiro` : `${formatDateBR(s.date)} a ${formatDateBR(e.date)}`;
+    }
+    return `${formatDateTimeBR(b.starts_at)} até ${formatDateTimeBR(b.ends_at)}`;
+  }
+
+  function buildBlockNote(b, compact) {
+    const note = document.createElement("div");
+    note.className = "agenda-block";
+    note.textContent = compact ? `Bloqueado · ${b.reason}` : `Bloqueado: ${b.reason} — ${blockWho(b)} (${blockWhen(b)})`;
+    return note;
+  }
+
+  function renderBlocks() {
+    if (!el.blocksList) return;
+    const admin = isAdmin();
+    el.blockForm.hidden = !admin;
+    el.bufferSave.hidden = !admin;
+    el.bufferSelect.disabled = !admin;
+    fillSelect(el.blockProfessional, state.professionals, "Clínica toda");
+    if (state.clinic) el.bufferSelect.value = String(state.clinic.appointment_buffer_minutes || 0);
+    el.blocksList.replaceChildren();
+    const upcoming = (state.blocks || []).filter((b) => new Date(b.ends_at).getTime() > Date.now());
+    if (!upcoming.length) {
+      const p = document.createElement("p");
+      p.className = "empty-state";
+      p.textContent = "Nenhum bloqueio futuro.";
+      el.blocksList.appendChild(p);
+      return;
+    }
+    upcoming.forEach((b) => {
+      const row = document.createElement("div");
+      row.className = "item-row";
+      const info = document.createElement("div");
+      info.className = "item-info";
+      const t = document.createElement("strong");
+      t.textContent = `${b.reason} · ${blockWho(b)}`;
+      const w = document.createElement("span");
+      w.textContent = blockWhen(b);
+      info.append(t, w);
+      row.appendChild(info);
+      if (admin) row.appendChild(actionButton("Remover", "button-outline", () => removeBlock(b)));
+      el.blocksList.appendChild(row);
+    });
+  }
+
+  async function handleBlockSubmit(event) {
+    event.preventDefault();
+    const sd = el.blockStartDate.value;
+    const ed = el.blockEndDate.value || sd;
+    const reason = el.blockReason.value.trim();
+    if (!sd) return showAdminFeedback("Informe a data de início do bloqueio.", "error");
+    if (reason.length < 2) return showAdminFeedback("Informe o motivo do bloqueio.", "error");
+    const startsAt = `${sd}T${el.blockStartTime.value || "00:00"}:00${CLINIC_UTC_OFFSET}`;
+    const endsAt = el.blockEndTime.value
+      ? `${ed}T${el.blockEndTime.value}:00${CLINIC_UTC_OFFSET}`
+      : `${addDaysISO(ed, 1)}T00:00:00${CLINIC_UTC_OFFSET}`;
+    if (new Date(endsAt) <= new Date(startsAt)) return showAdminFeedback("O fim do bloqueio precisa ser depois do início.", "error");
+    const conflicts = state.appointments.filter((a) =>
+      a.status === "confirmed" && a.starts_at &&
+      (!el.blockProfessional.value || a.professional_id === el.blockProfessional.value) &&
+      new Date(a.starts_at) < new Date(endsAt) && new Date(a.ends_at) > new Date(startsAt));
+    if (conflicts.length) {
+      const ok = await confirmAction("Já existem consultas nesse período",
+        `${plural(conflicts.length, "consulta confirmada fica", "consultas confirmadas ficam")} dentro do bloqueio. Elas não são canceladas automaticamente: remarque ou cancele cada uma depois. Bloquear mesmo assim?`);
+      if (!ok) return;
+    }
+    el.blockSubmit.disabled = true;
+    try {
+      const { clinicId } = await requireAuthorizedContext();
+      const { error } = await state.supabase.from("schedule_blocks").insert({
+        clinic_id: clinicId,
+        professional_id: el.blockProfessional.value || null,
+        starts_at: new Date(startsAt).toISOString(),
+        ends_at: new Date(endsAt).toISOString(),
+        reason
+      });
+      if (error) throw new Error(translateSupabaseError(error, "Não foi possível bloquear a agenda."));
+      el.blockForm.reset();
+      await loadBlocks();
+      renderAgenda();
+      showAdminFeedback("Agenda bloqueada.", "success");
+    } catch (err) {
+      showAdminFeedback(err.message, "error");
+    } finally {
+      el.blockSubmit.disabled = false;
+    }
+  }
+
+  async function removeBlock(b) {
+    const ok = await confirmAction("Remover bloqueio", `Liberar a agenda de ${blockWho(b)} (${blockWhen(b)})?`);
+    if (!ok) return;
+    const { data, error } = await state.supabase.from("schedule_blocks").delete().eq("id", b.id).select("id");
+    if (error || !data || !data.length) {
+      showAdminFeedback(translateSupabaseError(error || {}, "Não foi possível remover o bloqueio."), "error");
+      return;
+    }
+    await loadBlocks();
+    renderAgenda();
+    showAdminFeedback("Bloqueio removido.", "success");
+  }
+
+  async function saveBuffer() {
+    const minutes = Number(el.bufferSelect.value);
+    const { data, error } = await state.supabase.from("clinics")
+      .update({ appointment_buffer_minutes: minutes }).eq("id", state.clinic.id).select("id, appointment_buffer_minutes");
+    if (error || !data || !data.length) {
+      showAdminFeedback(translateSupabaseError(error || {}, "Não foi possível salvar o intervalo."), "error");
+      return;
+    }
+    state.clinic.appointment_buffer_minutes = minutes;
+    showAdminFeedback(minutes ? `Intervalo de ${minutes} minutos salvo.` : "Intervalo removido.", "success");
+  }
+
   // --- 9. Inicialização da Página ---
 
   async function bootstrap() {
@@ -2517,6 +2681,8 @@
     el.copyLink.addEventListener("click", copyBookingLink);
     el.downloadQr.addEventListener("click", downloadQrCode);
     el.teamForm.addEventListener("submit", handleTeamSubmit);
+    el.blockForm.addEventListener("submit", handleBlockSubmit);
+    el.bufferSave.addEventListener("click", saveBuffer);
     el.patientForm.addEventListener("submit", handlePatientSubmit);
     el.patientCancel.addEventListener("click", closePatientModal);
     el.patientModal.addEventListener("click", (event) => {

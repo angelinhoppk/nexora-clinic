@@ -975,3 +975,20 @@ a.button { text-decoration: none; }
 .tab-btn.active { scroll-margin-inline: 24px; }
 .waitlist-row .status-badge { width: fit-content; }
 .report-kpi strong { font-size: 20px; line-height: 1.3; }
+
+/* --- Etapa 6: bloqueios de agenda --- */
+.agenda-block {
+  padding: 10px 14px;
+  background: repeating-linear-gradient(135deg, #f1f3f4, #f1f3f4 8px, #e9ecee 8px, #e9ecee 16px);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  font-weight: 600;
+  color: #3d4a54;
+}
+.agenda-week .agenda-block { padding: 8px; font-size: 11px; }
+.field-row-2 { grid-template-columns: 1fr 0.8fr 1fr 0.8fr; }
+.block-form { margin-top: 6px; padding-top: 0; border-top: 0; }
+#blocks-list { margin-top: 18px; }
+#blocks-card { grid-column: 1 / -1; }
+@media (max-width: 640px) { .field-row-2 { grid-template-columns: 1fr 1fr; } }
+#blocks-card { order: 3; }
