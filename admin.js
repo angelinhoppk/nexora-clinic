@@ -574,7 +574,7 @@
         sub.textContent = `${getProfessionalNameById(appt.professional_id)} · ${durationLabel(appt.starts_at, appt.ends_at)}`;
         tdDate.appendChild(sub);
       } else {
-        tdDate.textContent = `Pedido para ${formatDateBR(appt.preferred_date)}`;
+        tdDate.textContent = appt.preferred_date ? `Pedido para ${formatDateBR(appt.preferred_date)}` : "Sem data pedida";
       }
 
       // 5. Status (+ motivo, quando houver)
